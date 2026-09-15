@@ -21,6 +21,6 @@
 ```./gradlew bootRun```
 
 ### 2. 프론트엔드 실행 (새 터미널을 열고 runkk-app 폴더로 이동)
-```cd runkk-app```
-```npm install```
+```cd runkk-app```<br>
+```npm install```<br>
 ```npx expo start```
