@@ -27,7 +27,7 @@
 ```./gradlew bootRun```
 
 ### 2. 프론트엔드 실행 (새 터미널을 열고 frontend 폴더로 이동)
-```cd runkk-app```<br>
+```cd frontend```<br>
 ```npm install```<br>
 #### Expo 계정 로그인 (터미널 안내에 따라 ID/PW 입력)
 ```npx expo login```<br>
