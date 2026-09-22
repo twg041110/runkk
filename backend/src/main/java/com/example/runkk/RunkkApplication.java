@@ -1,13 +1,13 @@
-package com.example.demo;
+package com.example.runkk;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
-public class DemoApplication {
+public class RunkkApplication {
 
 	public static void main(String[] args) {
-		SpringApplication.run(DemoApplication.class, args);
+		SpringApplication.run(RunkkApplication.class, args);
 	}
 
 }

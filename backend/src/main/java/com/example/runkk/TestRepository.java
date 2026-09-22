@@ -1,4 +1,4 @@
-package com.example.demo;
+package com.example.runkk;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
