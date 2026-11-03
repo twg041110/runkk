@@ -7,7 +7,7 @@ import {
   Tabs,
 } from 'expo-router/ui';
 import { StatusBar } from 'expo-status-bar';
-import type { ComponentType } from 'react';
+import type { ComponentRef, ComponentType, Ref } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -50,7 +50,10 @@ function TabBar(props: TabListProps) {
   return <View {...props} style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 18) }]} />;
 }
 
-type TabButtonProps = TabTriggerSlotProps & {
+// RN 0.88의 엄격한 타입에서는 expo-router가 주는 ref 타입이 Pressable과 달라서 Pressable 기준으로 맞춘다
+type TriggerProps = Omit<TabTriggerSlotProps, 'ref'> & { ref?: Ref<ComponentRef<typeof Pressable>> };
+
+type TabButtonProps = TriggerProps & {
   label: string;
   Icon: ComponentType<{ color: string }>;
 };
@@ -69,7 +72,7 @@ function TabButton({ label, Icon, isFocused, ...props }: TabButtonProps) {
   );
 }
 
-function RunButton({ isFocused, ...props }: TabTriggerSlotProps) {
+function RunButton({ isFocused, ...props }: TriggerProps) {
   return (
     <View style={styles.cell}>
       <Pressable {...props} style={[styles.runButton, !isFocused && styles.runButtonIdle]}>
