@@ -3,7 +3,7 @@
 러닝 플랫폼 모바일 애플리케이션 및 백엔드 서버
 
 ## 🛠 개발 도구 및 버전
-- **Frontend:** React Native 0.86 (Expo SDK 57), TypeScript
+- **Frontend:** React Native 0.88 (Expo SDK 58), TypeScript
 - **Backend:** Spring Boot, Java 25, Gradle
 - **DB:** MySQL 8.4 (서버) / 로컬은 MariaDB 또는 MySQL
 
@@ -14,7 +14,7 @@
 | 대상 | 설치할 것 |
 |---|---|
 | 모두 | Git (또는 GitHub Desktop), **Node.js LTS** |
-| 모두 | 스마트폰에 **Expo Go** 앱 (SDK 57 지원 버전) |
+| 모두 | 스마트폰에 **Expo Go** 앱 (SDK 58 지원 버전) |
 | 에뮬레이터 쓰는 사람 | Android Studio (가상 기기 1개 만들어 두기) |
 | 백엔드 실행하는 사람 | **JDK 25**, 로컬 DB (MariaDB 또는 MySQL) |
 
@@ -74,8 +74,8 @@ cd backend
 
 1. **`main`에 바로 푸시하지 않기.** `main`에 `backend/` 변경이 올라가면 **서버 노트북에 자동 배포**됩니다. 각자 브랜치에서 작업하고 PR로 합쳐 주세요.
 2. **비밀 파일은 절대 커밋하지 않기.** `application-secret.yaml`, `.env` 등 비밀번호가 들어간 파일은 커밋 목록에서 체크를 해제하세요.
-3. **Expo 버전은 혼자 올리지 않기.** 지금은 **SDK 57**로 맞춰 쓰고 있어요. 올릴 때는 팀 전체가 같이 올립니다.
-   - 내 버전 확인: `frontend` 폴더에서 `npm ls expo` → `expo@57.x.x`면 정상
+3. **Expo 버전은 혼자 올리지 않기.** 지금은 **SDK 58**로 맞춰 쓰고 있어요. 올릴 때는 팀 전체가 같이 올립니다.
+   - 내 버전 확인: `frontend` 폴더에서 `npm ls expo` → `expo@58.x.x`면 정상
 
 ---
 
