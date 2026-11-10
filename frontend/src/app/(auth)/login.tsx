@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { EyeIcon } from '@/components/icons';
+import { EyeIcon } from '@/components/common/icons';
 import { Palette } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
 

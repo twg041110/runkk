@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path, Text as SvgText } from 'react-native-svg';
 
-import { BellIcon, LocateIcon } from '@/components/icons';
+import { BellIcon, LocateIcon } from '@/components/common/icons';
 import { Palette } from '@/constants/theme';
 
 // 예시 값: 나중에 백엔드에서 받아온 기록으로 바꾸면 된다

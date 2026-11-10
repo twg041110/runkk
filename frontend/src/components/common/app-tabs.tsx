@@ -11,7 +11,7 @@ import type { ComponentRef, ComponentType, Ref } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { CommunityIcon, CourseIcon, FriendsIcon, PlayIcon, ProfileIcon } from '@/components/icons';
+import { CommunityIcon, CourseIcon, FriendsIcon, PlayIcon, ProfileIcon } from '@/components/common/icons';
 import { Palette } from '@/constants/theme';
 
 export default function AppTabs() {

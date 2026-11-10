@@ -3,7 +3,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useState } from 'react';
 import { useColorScheme } from 'react-native';
 
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
+import { AnimatedSplashOverlay } from '@/components/common/animated-icon';
 import { API_URL } from '@/constants/api';
 import { AuthContext } from '@/hooks/use-auth';
 
@@ -36,7 +36,7 @@ export default function RootLayout() {
             <Stack.Screen name="(tabs)" />
           </Stack.Protected>
           <Stack.Protected guard={!signedIn}>
-            <Stack.Screen name="login" />
+            <Stack.Screen name="(auth)/login" />
           </Stack.Protected>
         </Stack>
       </AuthContext>
