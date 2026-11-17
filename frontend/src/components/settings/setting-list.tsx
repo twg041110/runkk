@@ -16,9 +16,10 @@
  *   </SettingSection>
  */
 import { Children, Fragment, type ReactNode } from 'react';
-import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ChevronRightIcon } from '@/components/common/icons';
+import { Toggle } from '@/components/common/toggle';
 import { Palette } from '@/constants/theme';
 
 export function SettingSection({ title, children }: { title?: string; children: ReactNode }) {
@@ -77,17 +78,8 @@ export function SettingRow({
 
       {value && <Text style={styles.value}>{value}</Text>}
 
-      {hasSwitch && (
-        <Switch
-          value={switchValue}
-          onValueChange={onSwitch}
-          disabled={disabled}
-          // Figma: 켜지면 검정 바탕 + 형광 노랑 동그라미, 꺼지면 회색 바탕 + 흰 동그라미
-          trackColor={{ true: Palette.ink, false: '#9AA0AA' }}
-          thumbColor={switchValue ? Palette.accent : '#FFFFFF'}
-          ios_backgroundColor="#9AA0AA"
-        />
-      )}
+      {/* 직접 만든 스위치 (components/common/toggle.tsx). 켜고 끌 때 부드럽게 움직여요 */}
+      {hasSwitch && <Toggle value={switchValue} onChange={onSwitch} disabled={disabled} />}
 
       {onPress && !hasSwitch && <ChevronRightIcon color={Palette.hint} size={18} />}
     </Pressable>
@@ -114,17 +106,18 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: Palette.border,
   },
+  // 줄 높이: 이름만 있는 줄 44, 설명이 있는 줄 52 (위아래 여백 10)
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    minHeight: 50,
-    paddingVertical: 14,
+    minHeight: 44,
+    paddingVertical: 10,
     paddingLeft: 18,
     paddingRight: 14,
   },
   rowTall: {
-    minHeight: 60,
+    minHeight: 52,
   },
   disabled: {
     opacity: 0.4,
