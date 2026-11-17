@@ -6,12 +6,13 @@
  *   (세부 값은 지우지 않고 남겨 둬서, 다시 켜면 예전 값 그대로 돌아와요)
  * - 방해 금지 시간을 누르면 아래에서 시트가 올라와 시작·종료 시각을 골라요.
  */
-import { useRef, useState, type ComponentRef } from 'react';
+import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BottomSheet } from '@/components/common/bottom-sheet';
 import { ScreenHeader } from '@/components/common/screen-header';
+import { WheelPicker } from '@/components/common/wheel-picker';
 import { SettingRow, SettingSection } from '@/components/settings/setting-list';
 import { Palette } from '@/constants/theme';
 import { formatTime, useSettings, type NotifyKey, type Time } from '@/hooks/use-settings';
@@ -104,7 +105,6 @@ export default function NotificationSettingsScreen() {
 
 const HOURS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 const MINUTES = [0, 10, 20, 30, 40, 50];
-const CELL_HEIGHT = 44; // 고르는 칸 한 줄 높이
 
 // 24시간 ↔ 오전/오후 12시간 바꾸기. 예: 22시 → 오후 10시, 0시 → 오전 12시
 const isPm = (t: Time) => t.hour >= 12;
@@ -151,25 +151,27 @@ function QuietHoursPicker({
         ))}
       </View>
 
-      {/* 오전/오후 · 시 · 분 세 칸. 누르면 선택돼요.
-          TODO: Figma처럼 돌려서 고르는 휠 모양은 라이브러리를 쓰면 만들 수 있어요. 지금은 누르는 방식이에요. */}
-      <View style={pickerStyles.columns}>
-        <Column
-          items={['오전', '오후']}
-          selected={isPm(time) ? '오후' : '오전'}
-          onSelect={(v) => setTime({ ...time, hour: toHour24(v === '오후', hour12(time)) })}
-        />
-        <Column
-          items={HOURS.map(String)}
-          selected={String(hour12(time))}
-          onSelect={(v) => setTime({ ...time, hour: toHour24(isPm(time), Number(v)) })}
-        />
-        <Column
-          items={MINUTES.map((m) => String(m).padStart(2, '0'))}
-          selected={String(time.minute).padStart(2, '0')}
-          onSelect={(v) => setTime({ ...time, minute: Number(v) })}
-        />
-      </View>
+      {/* 오전/오후 · 시 · 분 세 칸짜리 휠. 위아래로 굴려서 가운데 띠에 맞춰 골라요.
+          (휠 부품: components/common/wheel-picker.tsx) */}
+      <WheelPicker
+        columns={[
+          {
+            items: ['오전', '오후'],
+            selected: isPm(time) ? '오후' : '오전',
+            onSelect: (v) => setTime({ ...time, hour: toHour24(v === '오후', hour12(time)) }),
+          },
+          {
+            items: HOURS.map(String),
+            selected: String(hour12(time)),
+            onSelect: (v) => setTime({ ...time, hour: toHour24(isPm(time), Number(v)) }),
+          },
+          {
+            items: MINUTES.map((m) => String(m).padStart(2, '0')),
+            selected: String(time.minute).padStart(2, '0'),
+            onSelect: (v) => setTime({ ...time, minute: Number(v) }),
+          },
+        ]}
+      />
 
       <Pressable
         style={pickerStyles.save}
@@ -178,49 +180,6 @@ function QuietHoursPicker({
         <Text style={pickerStyles.saveLabel}>저장</Text>
       </Pressable>
     </View>
-  );
-}
-
-// 세로로 고를 수 있는 한 칸 (선택된 항목은 굵고 회색 띠)
-function Column({
-  items,
-  selected,
-  onSelect,
-}: {
-  items: string[];
-  selected: string;
-  onSelect: (value: string) => void;
-}) {
-  // useRef: 화면에 그려진 ScrollView를 직접 움직이려고 잡아 두는 손잡이예요.
-  // ComponentRef<typeof ScrollView>: "ScrollView가 실제로 그려졌을 때의 그 물건" 타입이라는 뜻이에요.
-  const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
-
-  // 시트가 열릴 때(onLayout) 선택된 항목이 가운데 오도록 스크롤해 둬요.
-  // 한 칸 높이가 44라서, 선택된 칸 바로 위 칸부터 보이게 (index - 1) * 44만큼 내려요.
-  const scrollToSelected = () => {
-    const index = items.indexOf(selected);
-    scrollRef.current?.scrollTo({ y: Math.max(0, (index - 1) * CELL_HEIGHT), animated: false });
-  };
-
-  return (
-    <ScrollView
-      ref={scrollRef}
-      style={pickerStyles.column}
-      showsVerticalScrollIndicator={false}
-      onLayout={scrollToSelected}>
-      {items.map((item) => (
-        <Pressable
-          key={item}
-          style={[pickerStyles.cell, item === selected && pickerStyles.cellActive]}
-          onPress={() => onSelect(item)}
-          accessibilityRole="button"
-          accessibilityState={{ selected: item === selected }}>
-          <Text style={[pickerStyles.cellText, item === selected && pickerStyles.cellTextActive]}>
-            {item}
-          </Text>
-        </Pressable>
-      ))}
-    </ScrollView>
   );
 }
 
@@ -279,32 +238,6 @@ const pickerStyles = StyleSheet.create({
   },
   tabValueIdle: {
     color: Palette.muted,
-  },
-  columns: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  column: {
-    flex: 1,
-    height: CELL_HEIGHT * 3, // 세 줄만 보이게
-  },
-  cell: {
-    height: CELL_HEIGHT,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cellActive: {
-    backgroundColor: '#E9EBF0',
-  },
-  cellText: {
-    fontSize: 16,
-    color: Palette.hint,
-  },
-  cellTextActive: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Palette.ink,
   },
   save: {
     height: 56,
