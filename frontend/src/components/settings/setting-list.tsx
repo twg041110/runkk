@@ -106,18 +106,19 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: Palette.border,
   },
-  // 줄 높이: 이름만 있는 줄 44, 설명이 있는 줄 52 (위아래 여백 10)
+  // 줄 높이: 이름만 있는 줄 48, 설명이 있는 줄 56 이상 (위아래 여백 12)
+  // 더 크게/작게 하고 싶으면 paddingVertical 숫자만 바꾸면 돼요.
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    minHeight: 44,
-    paddingVertical: 10,
+    minHeight: 48,
+    paddingVertical: 12,
     paddingLeft: 18,
     paddingRight: 14,
   },
   rowTall: {
-    minHeight: 52,
+    minHeight: 56,
   },
   disabled: {
     opacity: 0.4,
