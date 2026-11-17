@@ -11,7 +11,7 @@ import type { ComponentRef, ComponentType, Ref } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { CommunityIcon, CourseIcon, FriendsIcon, PlayIcon, ProfileIcon } from '@/components/common/icons';
+import { CommunityIcon, CourseIcon, CrewIcon, FriendsIcon, HomeIcon, PlayIcon } from '@/components/common/icons';
 import { Palette } from '@/constants/theme';
 
 export default function AppTabs() {
@@ -19,8 +19,8 @@ export default function AppTabs() {
     <>
       {/* 화면 배경이 항상 밝은색이라 다크 모드에서도 상태바 글자를 어둡게 둔다 */}
       <StatusBar style="dark" />
-      <Tabs>
-        <TabSlot />
+      <Tabs style={styles.fill}>
+        <TabSlot style={styles.fill} />
         <TabList asChild>
           <TabBar>
             <TabTrigger name="community" href="/community" asChild>
@@ -35,9 +35,11 @@ export default function AppTabs() {
             <TabTrigger name="friends" href="/friends" asChild>
               <TabButton label="친구와 러닝" Icon={FriendsIcon} />
             </TabTrigger>
-            <TabTrigger name="profile" href="/profile" asChild>
-              <TabButton label="내 정보" Icon={ProfileIcon} />
+            <TabTrigger name="crew" href="/crew" asChild>
+              <TabButton label="크루" Icon={CrewIcon} />
             </TabTrigger>
+            {/* 피그마에서 '내 정보'는 탭이 아니라 홈 상단 버튼으로 들어간다. 주소만 살려 두고 탭 바에는 안 보이게 한다 */}
+            <TabTrigger name="profile" href="/profile" style={styles.hidden} />
           </TabBar>
         </TabList>
       </Tabs>
@@ -72,18 +74,23 @@ function TabButton({ label, Icon, isFocused, ...props }: TabButtonProps) {
   );
 }
 
+// 홈에 있을 때는 '러닝 시작', 다른 탭에 있을 때는 '홈' 버튼이 된다 (피그마 기준)
 function RunButton({ isFocused, ...props }: TriggerProps) {
   return (
     <View style={styles.cell}>
       <Pressable {...props} style={[styles.runButton, !isFocused && styles.runButtonIdle]}>
-        <PlayIcon color={Palette.background} />
-        <Text style={styles.runLabel}>러닝 시작</Text>
+        {isFocused ? <PlayIcon color={Palette.background} /> : <HomeIcon color={Palette.white} />}
+        <Text style={styles.runLabel}>{isFocused ? '러닝 시작' : '홈'}</Text>
       </Pressable>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  // 웹에서 탭 화면이 내용 길이만큼 늘어나지 않고 화면 높이에 맞도록 고정한다
+  fill: {
+    flex: 1,
+  },
   bar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -98,6 +105,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   tab: {
+    width: 68,
     alignItems: 'center',
     gap: 4,
     paddingVertical: 6,
@@ -126,6 +134,9 @@ const styles = StyleSheet.create({
   },
   runButtonIdle: {
     backgroundColor: Palette.muted,
+  },
+  hidden: {
+    display: 'none',
   },
   runLabel: {
     fontSize: 12,

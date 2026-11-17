@@ -39,6 +39,10 @@ export default function RootLayout() {
               <Stack.Screen name="(tabs)" />
               {/* 설정은 탭 바 없이 전체 화면으로 열린다 */}
               <Stack.Screen name="settings" />
+              {/* 탭 안에서 들어가는 하위 화면들 (탭 바 없이 전체 화면) */}
+              <Stack.Screen name="courses" />
+              <Stack.Screen name="friend" />
+              <Stack.Screen name="crews" />
             </Stack.Protected>
             <Stack.Protected guard={!signedIn}>
               <Stack.Screen name="(auth)/login" />
