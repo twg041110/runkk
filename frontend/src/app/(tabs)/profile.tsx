@@ -1,5 +1,38 @@
+import { router } from 'expo-router';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+
 import { ComingSoon } from '@/components/common/coming-soon';
+import { Palette } from '@/constants/theme';
 
 export default function ProfileScreen() {
-  return <ComingSoon title="내 정보" />;
+  return (
+    <View style={styles.screen}>
+      <ComingSoon title="내 정보" />
+      {/* TODO(임시 입구): 내 정보 화면이 만들어지면 그 화면의 설정 버튼으로 옮기고 이 버튼은 지워요 */}
+      <Pressable style={styles.button} onPress={() => router.push('/settings')} accessibilityRole="button">
+        <Text style={styles.label}>설정 열기 (임시)</Text>
+      </Pressable>
+    </View>
+  );
 }
+
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: Palette.background,
+  },
+  button: {
+    position: 'absolute',
+    alignSelf: 'center',
+    bottom: 140,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 999,
+    backgroundColor: Palette.ink,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Palette.background,
+  },
+});

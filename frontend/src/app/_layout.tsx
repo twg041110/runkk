@@ -6,6 +6,7 @@ import { useColorScheme } from 'react-native';
 import { AnimatedSplashOverlay } from '@/components/common/animated-icon';
 import { API_URL } from '@/constants/api';
 import { AuthContext } from '@/hooks/use-auth';
+import { SettingsProvider } from '@/hooks/use-settings';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -29,16 +30,21 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <AnimatedSplashOverlay />
-      <AuthContext value={{ signIn: () => setSignedIn(true) }}>
-        {/* 로그인 전에는 로그인 화면만, 로그인 후에는 탭 화면만 열린다 */}
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Protected guard={signedIn}>
-            <Stack.Screen name="(tabs)" />
-          </Stack.Protected>
-          <Stack.Protected guard={!signedIn}>
-            <Stack.Screen name="(auth)/login" />
-          </Stack.Protected>
-        </Stack>
+      <AuthContext value={{ signIn: () => setSignedIn(true), signOut: () => setSignedIn(false) }}>
+        {/* 설정 값(거리 단위, 알림 등)을 모든 화면이 같이 쓰도록 감싼다 */}
+        <SettingsProvider>
+          {/* 로그인 전에는 로그인 화면만, 로그인 후에는 탭 화면만 열린다 */}
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Protected guard={signedIn}>
+              <Stack.Screen name="(tabs)" />
+              {/* 설정은 탭 바 없이 전체 화면으로 열린다 */}
+              <Stack.Screen name="settings" />
+            </Stack.Protected>
+            <Stack.Protected guard={!signedIn}>
+              <Stack.Screen name="(auth)/login" />
+            </Stack.Protected>
+          </Stack>
+        </SettingsProvider>
       </AuthContext>
     </ThemeProvider>
   );
