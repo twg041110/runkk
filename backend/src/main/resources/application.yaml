@@ -9,9 +9,20 @@ spring:
   datasource:
     driver-class-name: org.mariadb.jdbc.Driver
   jpa:
+    open-in-view: false
     hibernate:
       ddl-auto: update
     show-sql: true
     properties:
       hibernate:
         format_sql: true
+        # member, comment, block 처럼 DB 예약어와 겹칠 수 있는 이름을 안전하게 감싼다
+        globally_quoted_identifiers: true
+  jackson:
+    time-zone: Asia/Seoul
+
+runkk:
+  jwt:
+    # 로그인 토큰 서명용 비밀값. 서버에서는 .env 의 JWT_SECRET 으로 넣는다 (비어 있으면 임시 키)
+    secret: ${JWT_SECRET:}
+    expire-days: 14
