@@ -114,3 +114,48 @@ export function PlayIcon({ color, size = 18 }: IconProps) {
     </Svg>
   );
 }
+// ───────── 러닝 화면에서 쓰는 아이콘 ─────────
+
+export function PauseIcon({ color, size = 18 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path d="M7 5h3.2v14H7zM13.8 5H17v14h-3.2z" fill={color} />
+    </Svg>
+  );
+}
+
+export function StopIcon({ color, size = 18 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path d="M7 8.5A1.5 1.5 0 0 1 8.5 7h7A1.5 1.5 0 0 1 17 8.5v7a1.5 1.5 0 0 1-1.5 1.5h-7A1.5 1.5 0 0 1 7 15.5z" fill={color} />
+    </Svg>
+  );
+}
+
+export function LockIcon(props: IconProps) {
+  return (
+    <LineIcon {...props}>
+      <Path d="M6 11h12v9H6z" />
+      <Path d="M8.5 11V8a3.5 3.5 0 0 1 7 0v3" />
+    </LineIcon>
+  );
+}
+
+export function ShareIcon(props: IconProps) {
+  return (
+    <LineIcon {...props}>
+      <Path d="M12 15V4M8 8l4-4 4 4" />
+      <Path d="M5 13v6h14v-6" />
+    </LineIcon>
+  );
+}
+
+export function TrophyIcon(props: IconProps) {
+  return (
+    <LineIcon {...props}>
+      <Path d="M8 4h8v5a4 4 0 0 1-8 0z" />
+      <Path d="M8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4" />
+      <Path d="M12 13v4M9 20h6" />
+    </LineIcon>
+  );
+}

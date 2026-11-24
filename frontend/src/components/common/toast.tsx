@@ -10,7 +10,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CheckIcon } from '@/components/common/icons';
 import { Palette } from '@/constants/theme';
 
-export function Toast({ message, onHide }: { message: string; onHide: () => void }) {
+// bottom: 화면 아래에서 띄울 높이 (기본 24). 아래쪽 버튼을 가리면 더 크게 줘요
+export function Toast({ message, onHide, bottom = 24 }: { message: string; onHide: () => void; bottom?: number }) {
   const insets = useSafeAreaInsets();
 
   // useEffect: message가 바뀔 때마다 실행돼요. 2.5초 타이머를 걸고,
@@ -24,7 +25,7 @@ export function Toast({ message, onHide }: { message: string; onHide: () => void
   if (!message) return null;
 
   return (
-    <View style={[styles.toast, { bottom: insets.bottom + 24 }]} pointerEvents="none">
+    <View style={[styles.toast, { bottom: insets.bottom + bottom }]} pointerEvents="none">
       <CheckIcon color={Palette.accent} size={18} />
       <Text style={styles.text}>{message}</Text>
     </View>
