@@ -203,10 +203,15 @@ export function RunSessionProvider({ children }: { children: ReactNode }) {
     setNow(t);
     startClock();
     changeStatus('running');
-    watchRef.current = await Location.watchPositionAsync(
-      { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1000, distanceInterval: 0 },
-      onLocation,
-    );
+    try {
+      watchRef.current = await Location.watchPositionAsync(
+        { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1000, distanceInterval: 0 },
+        onLocation,
+      );
+    } catch {
+      // 러닝 도중 폰 위치가 꺼지는 등 GPS를 못 켜면, 앱이 멈추지 않게 "GPS 약함" 안내만 띄워요
+      setGpsWeak(true);
+    }
   };
 
   const pause = () => {
