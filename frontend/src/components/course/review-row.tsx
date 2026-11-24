@@ -2,7 +2,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { Avatar, Tag } from '@/components/common/ui';
 import { Palette } from '@/constants/theme';
-import type { Review } from '@/data/courses';
+import type { Review } from '@/lib/courses';
 
 /** 코스 후기 한 줄 */
 export function ReviewRow({ review, last }: { review: Review; last?: boolean }) {

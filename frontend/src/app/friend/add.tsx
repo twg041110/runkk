@@ -1,35 +1,61 @@
+import * as Clipboard from 'expo-clipboard';
 import { useState } from 'react';
-import { Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { ChatIcon, CopyIcon, LinkIcon, PlusIcon, QrIcon, SearchIcon } from '@/components/common/icons';
-import { Avatar, Button, Card, EmptyState, Sheet, SubScreen, Tag, TopBar, shared, useToast } from '@/components/common/ui';
+import { ChatIcon, CopyIcon, LinkIcon, PlusIcon, SearchIcon } from '@/components/common/icons';
+import { Avatar, Button, Card, EmptyState, SubScreen, TopBar, useToast } from '@/components/common/ui';
 import { Palette } from '@/constants/theme';
-import { FRIEND_REQUESTS, ME, SUGGESTED_RUNNERS, type Person } from '@/data/friends';
-import { actions, useAppStore } from '@/hooks/use-app-store';
+import { useAuth } from '@/hooks/use-auth';
+import { errorMessage, type Profile } from '@/lib/api';
+import { ago } from '@/lib/format';
+import {
+  answerFriendRequest,
+  removeFriend,
+  sendFriendRequest,
+  useFriendRequests,
+  useFriends,
+  useMemberSearch,
+} from '@/lib/friends';
 
-// 검색으로 찾을 수 있는 예시 러너
-const SEARCHABLE: Person[] = [
-  { id: 'jiwoo', name: '지우', detail: '누적 88.2km · 강남구' },
-  { id: 'jiyoon', name: '지윤', detail: '누적 260.4km · 영등포구' },
-  ...SUGGESTED_RUNNERS,
-];
+const CODE_PATTERN = /^RKK-[A-Z0-9]{4}$/;
 
 export default function AddFriendScreen() {
   const toast = useToast();
-  const accepted = useAppStore((s) => s.acceptedRequests);
-  const rejected = useAppStore((s) => s.rejectedRequests);
-  const added = useAppStore((s) => s.addedRunners);
+  const { me } = useAuth();
   const [query, setQuery] = useState('');
-  const [qrOpen, setQrOpen] = useState(false);
-
+  const [busyId, setBusyId] = useState<number | string | null>(null);
+  const requestsQuery = useFriendRequests();
+  const friendsQuery = useFriends();
   const q = query.trim();
-  const results = q ? SEARCHABLE.filter((p) => p.name.includes(q) || q.toUpperCase() === ME.code) : [];
-  const requests = FRIEND_REQUESTS.filter((r) => !rejected.includes(r.id));
-  const waiting = requests.filter((r) => !accepted.includes(r.id)).length;
+  const asCode = q.toUpperCase();
+  const isCode = CODE_PATTERN.test(asCode);
+  const searchQuery = useMemberSearch(isCode ? '' : q);
 
-  const copyCode = () => toast.show(`내 친구 코드 ${ME.code}를 복사했어요`);
+  const myCode = me?.friendCode ?? '';
+  const received = requestsQuery.data?.received ?? [];
+  const sent = requestsQuery.data?.sent ?? [];
+  const friendIds = new Set((friendsQuery.data ?? []).map((f) => f.memberId));
+  const sentIds = new Set(sent.map((r) => r.member.memberId));
+  const results = (searchQuery.data ?? []).filter((p) => p.memberId !== me?.memberId);
+
+  const act = async (key: number | string, task: () => Promise<unknown>, done: string) => {
+    setBusyId(key);
+    try {
+      await task();
+      toast.show(done);
+    } catch (e) {
+      toast.show(errorMessage(e));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const copyCode = async () => {
+    await Clipboard.setStringAsync(myCode);
+    toast.show(`내 친구 코드 ${myCode}를 복사했어요`);
+  };
   const share = (via: string) =>
-    Share.share({ message: `런크크에서 같이 달려요! 친구 코드: ${ME.code}` }).catch(() =>
+    Share.share({ message: `런크크에서 같이 달려요! 친구 추가에서 내 코드 ${myCode} 를 검색해 주세요` }).catch(() =>
       toast.show(`${via} 공유를 열 수 없어요`),
     );
 
@@ -41,26 +67,56 @@ export default function AddFriendScreen() {
           style={styles.searchInput}
           value={query}
           onChangeText={setQuery}
-          placeholder="닉네임 또는 친구 코드로 검색"
+          placeholder="닉네임 또는 친구 코드(RKK-XXXX)로 검색"
           placeholderTextColor={Palette.hint}
-          autoCapitalize="characters"
+          autoCapitalize="none"
           returnKeyType="search"
         />
       </View>
 
       {q ? (
-        results.length > 0 ? (
+        isCode ? (
+          // 친구 코드는 정확히 맞으면 바로 요청을 보낼 수 있다
+          <Card style={styles.list}>
+            <View style={styles.row}>
+              <Avatar name={asCode.slice(4)} size={42} />
+              <View style={styles.flex}>
+                <Text style={styles.name}>친구 코드 {asCode}</Text>
+                <Text style={styles.sub}>
+                  {asCode === myCode ? '내 친구 코드예요' : '이 코드의 러너에게 친구 요청을 보내요'}
+                </Text>
+              </View>
+              {asCode !== myCode ? (
+                <AddButton
+                  busy={busyId === asCode}
+                  label="요청"
+                  onPress={() =>
+                    act(asCode, () => sendFriendRequest({ friendCode: asCode }), '친구 요청을 보냈어요')
+                  }
+                />
+              ) : null}
+            </View>
+          </Card>
+        ) : searchQuery.loading ? (
+          <ActivityIndicator color={Palette.ink} style={styles.loading} />
+        ) : searchQuery.error ? (
+          <EmptyState title="검색하지 못했어요" message={searchQuery.error} />
+        ) : results.length > 0 ? (
           <Card style={styles.list}>
             {results.map((person, index) => (
               <PersonRow
-                key={person.id}
+                key={person.memberId}
                 person={person}
                 last={index === results.length - 1}
-                done={added.includes(person.id)}
-                onAdd={() => {
-                  actions.addRunner(person.id);
-                  toast.show(`${person.name}님에게 친구 요청을 보냈어요`);
-                }}
+                state={friendIds.has(person.memberId) ? 'friend' : sentIds.has(person.memberId) ? 'sent' : 'none'}
+                busy={busyId === person.memberId}
+                onAdd={() =>
+                  act(
+                    person.memberId,
+                    () => sendFriendRequest({ memberId: person.memberId }),
+                    `${person.nickname}님에게 친구 요청을 보냈어요`,
+                  )
+                }
               />
             ))}
           </Card>
@@ -71,10 +127,9 @@ export default function AddFriendScreen() {
         <>
           <View style={styles.code}>
             <Text style={styles.codeLabel}>내 친구 코드</Text>
-            <Text style={styles.codeValue}>{ME.code}</Text>
+            <Text style={styles.codeValue}>{myCode}</Text>
             <View style={styles.codeButtons}>
               <DarkButton label="코드 복사" icon={<CopyIcon color={Palette.white} size={16} />} onPress={copyCode} />
-              <DarkButton label="QR 코드" icon={<QrIcon color={Palette.white} size={16} />} onPress={() => setQrOpen(true)} />
             </View>
           </View>
 
@@ -105,114 +160,150 @@ export default function AddFriendScreen() {
           <Card style={styles.list}>
             <View style={styles.headRow}>
               <Text style={styles.cardTitle}>받은 친구 요청</Text>
-              {waiting > 0 ? (
+              {received.length > 0 ? (
                 <View style={styles.redBadge}>
-                  <Text style={styles.redBadgeText}>{waiting}</Text>
+                  <Text style={styles.redBadgeText}>{received.length}</Text>
                 </View>
               ) : null}
             </View>
-            {requests.length === 0 ? <Text style={styles.empty}>받은 친구 요청이 없어요</Text> : null}
-            {requests.map((person, index) => {
-              const isAccepted = accepted.includes(person.id);
-              return (
-                <View key={person.id} style={[styles.row, index < requests.length - 1 && styles.border]}>
-                  <Avatar name={person.name} size={42} />
-                  <View style={styles.flex}>
-                    <Text style={styles.name}>{person.name}</Text>
-                    <Text style={styles.sub}>{person.detail}</Text>
-                  </View>
-                  {isAccepted ? (
-                    <Text style={styles.doneText}>친구가 됐어요</Text>
-                  ) : (
-                    <>
-                      <SmallButton
-                        label="거절"
-                        tone="gray"
-                        onPress={() => {
-                          actions.rejectRequest(person.id);
-                          toast.show(`${person.name}님의 요청을 거절했어요`);
-                        }}
-                      />
-                      <SmallButton
-                        label="수락"
-                        tone="lime"
-                        onPress={() => {
-                          actions.acceptRequest(person.id);
-                          toast.show(`${person.name}님과 친구가 됐어요`);
-                        }}
-                      />
-                    </>
-                  )}
+            {requestsQuery.loading && !requestsQuery.data ? <ActivityIndicator color={Palette.ink} style={styles.loading} /> : null}
+            {requestsQuery.data && received.length === 0 ? <Text style={styles.empty}>받은 친구 요청이 없어요</Text> : null}
+            {received.map((request, index) => (
+              <View key={request.friendshipId} style={[styles.row, index < received.length - 1 && styles.border]}>
+                <Avatar name={request.member.nickname} size={42} />
+                <View style={styles.flex}>
+                  <Text style={styles.name}>{request.member.nickname}</Text>
+                  <Text style={styles.sub}>
+                    {[request.member.region, ago(request.requestedAt)].filter(Boolean).join(' · ')}
+                  </Text>
                 </View>
-              );
-            })}
-          </Card>
-
-          <Card style={styles.list}>
-            <View>
-              <Text style={styles.cardTitle}>추천 러너</Text>
-              <Text style={styles.sub}>나와 비슷한 곳에서, 비슷한 페이스로 달려요</Text>
-            </View>
-            {SUGGESTED_RUNNERS.map((person, index) => (
-              <PersonRow
-                key={person.id}
-                person={person}
-                last={index === SUGGESTED_RUNNERS.length - 1}
-                done={added.includes(person.id)}
-                onAdd={() => {
-                  actions.addRunner(person.id);
-                  toast.show(`${person.name}님에게 친구 요청을 보냈어요`);
-                }}
-              />
+                <SmallButton
+                  label="거절"
+                  tone="gray"
+                  disabled={busyId === request.friendshipId}
+                  onPress={() =>
+                    act(
+                      request.friendshipId,
+                      () => answerFriendRequest(request.friendshipId, false),
+                      `${request.member.nickname}님의 요청을 거절했어요`,
+                    )
+                  }
+                />
+                <SmallButton
+                  label="수락"
+                  tone="lime"
+                  disabled={busyId === request.friendshipId}
+                  onPress={() =>
+                    act(
+                      request.friendshipId,
+                      () => answerFriendRequest(request.friendshipId, true),
+                      `${request.member.nickname}님과 친구가 됐어요`,
+                    )
+                  }
+                />
+              </View>
             ))}
           </Card>
+
+          {sent.length > 0 ? (
+            <Card style={styles.list}>
+              <View>
+                <Text style={styles.cardTitle}>보낸 친구 요청</Text>
+                <Text style={styles.sub}>상대가 수락하면 친구 목록에 나타나요</Text>
+              </View>
+              {sent.map((request, index) => (
+                <View key={request.friendshipId} style={[styles.row, index < sent.length - 1 && styles.border]}>
+                  <Avatar name={request.member.nickname} size={42} />
+                  <View style={styles.flex}>
+                    <Text style={styles.name}>{request.member.nickname}</Text>
+                    <Text style={styles.sub}>{ago(request.requestedAt)} 보냄</Text>
+                  </View>
+                  <SmallButton
+                    label="취소"
+                    tone="gray"
+                    disabled={busyId === request.friendshipId}
+                    onPress={() => act(request.friendshipId, () => removeFriend(request.friendshipId), '친구 요청을 취소했어요')}
+                  />
+                </View>
+              ))}
+            </Card>
+          ) : null}
         </>
       )}
-
-      <Sheet visible={qrOpen} onClose={() => setQrOpen(false)}>
-        <View>
-          <Text style={shared.sheetTitle}>내 QR 코드</Text>
-          <Text style={shared.sheetCaption}>친구가 런크크 앱으로 찍으면 바로 친구 요청이 가요</Text>
-        </View>
-        <View style={styles.qrBox}>
-          <QrIcon color={Palette.ink} size={160} />
-          <Text style={styles.qrCode}>{ME.code}</Text>
-        </View>
-        <Button label="확인" tone="dark" onPress={() => setQrOpen(false)} />
-      </Sheet>
     </SubScreen>
   );
 }
 
-function PersonRow({ person, last, done, onAdd }: { person: Person; last: boolean; done: boolean; onAdd: () => void }) {
+function PersonRow({
+  person,
+  last,
+  state,
+  busy,
+  onAdd,
+}: {
+  person: Profile;
+  last: boolean;
+  state: 'none' | 'sent' | 'friend';
+  busy: boolean;
+  onAdd: () => void;
+}) {
   return (
     <View style={[styles.row, !last && styles.border]}>
-      <Avatar name={person.name} size={42} />
+      <Avatar name={person.nickname} size={42} />
       <View style={styles.flex}>
-        <View style={styles.nameRow}>
-          <Text style={styles.name}>{person.name}</Text>
-          <Text style={styles.sub}>{person.detail}</Text>
-        </View>
-        {person.note ? <Tag label={person.note} size={11} /> : null}
+        <Text style={styles.name}>{person.nickname}</Text>
+        <Text style={styles.sub}>{person.region ?? person.bio ?? person.friendCode}</Text>
       </View>
-      {done ? (
+      {state === 'friend' ? (
+        <SmallButton label="친구" tone="gray" />
+      ) : state === 'sent' ? (
         <SmallButton label="요청함" tone="gray" />
       ) : (
-        <Pressable onPress={onAdd} style={styles.addButton} accessibilityRole="button" accessibilityLabel={`${person.name} 친구 추가`}>
-          <PlusIcon color={Palette.white} size={14} strokeWidth={2.6} />
-          <Text style={styles.addText}>추가</Text>
-        </Pressable>
+        <AddButton busy={busy} label="추가" onPress={onAdd} accessibilityLabel={`${person.nickname} 친구 추가`} />
       )}
     </View>
   );
 }
 
-function SmallButton({ label, tone, onPress }: { label: string; tone: 'gray' | 'lime'; onPress?: () => void }) {
+function AddButton({
+  busy,
+  label,
+  onPress,
+  accessibilityLabel,
+}: {
+  busy: boolean;
+  label: string;
+  onPress: () => void;
+  accessibilityLabel?: string;
+}) {
+  return (
+    <Pressable
+      onPress={busy ? undefined : onPress}
+      style={[styles.addButton, busy && styles.busy]}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? label}>
+      <PlusIcon color={Palette.white} size={14} strokeWidth={2.6} />
+      <Text style={styles.addText}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function SmallButton({
+  label,
+  tone,
+  onPress,
+  disabled,
+}: {
+  label: string;
+  tone: 'gray' | 'lime';
+  onPress?: () => void;
+  disabled?: boolean;
+}) {
   return (
     <Pressable
       onPress={onPress}
-      disabled={!onPress}
-      style={[styles.small, { backgroundColor: tone === 'lime' ? Palette.accent : Palette.chip }]}
+      disabled={!onPress || disabled}
+      style={[styles.small, { backgroundColor: tone === 'lime' ? Palette.accent : Palette.chip }, disabled && styles.busy]}
       accessibilityRole="button">
       <Text style={styles.smallText}>{label}</Text>
     </Pressable>
@@ -230,6 +321,8 @@ function DarkButton({ label, icon, onPress }: { label: string; icon: React.React
 
 const styles = StyleSheet.create({
   flex: { flex: 1, gap: 4 },
+  loading: { paddingVertical: 20 },
+  busy: { opacity: 0.5 },
   search: {
     height: 52,
     flexDirection: 'row',
@@ -266,10 +359,8 @@ const styles = StyleSheet.create({
   empty: { fontSize: 13, color: Palette.muted, paddingVertical: 12 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
   border: { borderBottomWidth: 1, borderBottomColor: Palette.chip },
-  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   name: { fontSize: 15, fontWeight: '700', color: Palette.ink },
   sub: { fontSize: 12, color: Palette.muted },
-  doneText: { fontSize: 12, fontWeight: '700', color: Palette.online },
   small: { borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 },
   smallText: { fontSize: 12, fontWeight: '700', color: Palette.ink },
   addButton: {
@@ -282,6 +373,4 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   addText: { fontSize: 12, fontWeight: '700', color: Palette.white },
-  qrBox: { alignItems: 'center', gap: 10, padding: 24, backgroundColor: Palette.white, borderRadius: 20 },
-  qrCode: { fontSize: 16, fontWeight: '900', color: Palette.ink },
 });

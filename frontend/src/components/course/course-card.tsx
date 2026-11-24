@@ -1,16 +1,43 @@
 import { router } from 'expo-router';
+import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { BookmarkIcon, StarIcon } from '@/components/common/icons';
 import { Tag } from '@/components/common/ui';
 import { CourseMap } from '@/components/course/course-map';
 import { LevelColors, Palette } from '@/constants/theme';
-import type { Course } from '@/data/courses';
-import { actions, useAppStore } from '@/hooks/use-app-store';
+import { useAuth } from '@/hooks/use-auth';
+import { errorMessage } from '@/lib/api';
+import { setCourseSaved, type Course } from '@/lib/courses';
 
-/** 목록용 코스 카드 (지도 썸네일 · 배지 · 이름 · 거리 · 별점 · 저장) */
-export function CourseCard({ course, onSaved }: { course: Course; onSaved?: (course: Course, saved: boolean) => void }) {
-  const saved = useAppStore((s) => s.savedCourses).includes(course.id);
+/**
+ * 목록용 코스 카드 (지도 썸네일 · 배지 · 이름 · 거리 · 별점 · 저장)
+ * 저장 버튼은 누르는 즉시 바뀌고, 서버 저장에 실패하면 되돌린 뒤 onError 로 알려 준다.
+ */
+export function CourseCard({
+  course,
+  onSaved,
+  onError,
+}: {
+  course: Course;
+  onSaved?: (course: Course, saved: boolean) => void;
+  onError?: (message: string) => void;
+}) {
+  const { requireLogin } = useAuth();
+  const [override, setOverride] = useState<boolean | null>(null);
+  const saved = override ?? course.saved;
+  const toggleSave = async () => {
+    if (!requireLogin()) return;
+    const next = !saved;
+    setOverride(next);
+    try {
+      await setCourseSaved(course.courseId, next);
+      onSaved?.(course, next);
+    } catch (e) {
+      setOverride(!next);
+      onError?.(errorMessage(e));
+    }
+  };
   const level = LevelColors[course.level];
   // 카드 누르기(상세로)와 저장 버튼을 나란히 둔다. 버튼 안에 버튼이 들어가지 않게 하기 위해서다.
   return (
@@ -33,18 +60,20 @@ export function CourseCard({ course, onSaved }: { course: Course; onSaved?: (cou
           {course.distanceKm}km · 약 {course.minutes}분 · 고도 +{course.elevation}m
         </Text>
         <View style={styles.ratingRow}>
-          <StarIcon />
+          {course.reviewCount > 0 ? <StarIcon /> : null}
           <Text style={styles.rating} numberOfLines={1}>
-            {course.rating} · 이번 주 {course.weeklyRunners}명이 달렸어요
+            {[
+              course.reviewCount > 0 ? `${course.rating}` : '아직 후기 없음',
+              course.weeklyRunners > 0 ? `이번 주 ${course.weeklyRunners}명이 달렸어요` : null,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
           </Text>
         </View>
       </View>
       </Pressable>
       <Pressable
-        onPress={() => {
-          actions.toggleSavedCourse(course.id);
-          onSaved?.(course, !saved);
-        }}
+        onPress={toggleSave}
         hitSlop={10}
         accessibilityRole="button"
         accessibilityLabel={saved ? '저장 취소' : '코스 저장'}>

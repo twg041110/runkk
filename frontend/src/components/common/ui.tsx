@@ -654,14 +654,78 @@ export function ResultScreen({
   );
 }
 
-/** 비어 있을 때 안내 */
-export function EmptyState({ title, message }: { title: string; message: string }) {
+/** 비어 있을 때 안내. action 을 주면 다음 행동 버튼 하나를 같이 보여 준다 */
+export function EmptyState({
+  title,
+  message,
+  action,
+  compact,
+}: {
+  title: string;
+  message: string;
+  action?: { label: string; onPress: () => void };
+  compact?: boolean;
+}) {
   return (
-    <View style={styles.empty}>
+    <View style={[styles.empty, compact && styles.emptyCompact]}>
       <Text style={styles.emptyTitle}>{title}</Text>
       <Text style={styles.emptyMessage}>{message}</Text>
+      {action ? (
+        <Button label={action.label} tone="dark" height={44} radius={12} fontSize={14} onPress={action.onPress} style={styles.emptyAction} />
+      ) : null}
     </View>
   );
+}
+
+/** 서버에서 불러오는 중일 때 자리를 잡아 두는 회색 블록 */
+export function LoadingBlock({ height = 96, count = 2 }: { height?: number; count?: number }) {
+  const opacity = useRef(new Animated.Value(0.5)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 1, duration: 700, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.5, duration: 700, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [opacity]);
+  return (
+    <View style={styles.loadingList} accessibilityLabel="불러오는 중" accessible>
+      {Array.from({ length: count }, (_, i) => (
+        <Animated.View key={i} style={[styles.loadingBlock, { height, opacity }]} />
+      ))}
+    </View>
+  );
+}
+
+/** 불러오기에 실패했을 때: 이유 + 다시 시도 */
+export function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <View style={[styles.empty, styles.emptyCompact]}>
+      <Text style={styles.emptyTitle}>불러오지 못했어요</Text>
+      <Text style={styles.emptyMessage}>{message}</Text>
+      <Button label="다시 시도" tone="outline" height={44} radius={12} fontSize={14} onPress={onRetry} style={styles.emptyAction} />
+    </View>
+  );
+}
+
+/**
+ * 서버 데이터 상태에 따라 알맞은 화면을 보여 준다.
+ * 불러오는 중 → 회색 블록 / 실패 → 다시 시도 / 성공 → children(data)
+ */
+export function QueryView<T>({
+  query,
+  children,
+  loading,
+}: {
+  query: { data: T | undefined; error: string | null; loading: boolean; reload: () => void };
+  children: (data: T) => ReactNode;
+  loading?: ReactNode;
+}) {
+  if (query.data !== undefined) return <>{children(query.data)}</>;
+  if (query.error) return <ErrorState message={query.error} onRetry={query.reload} />;
+  return <>{loading ?? <LoadingBlock />}</>;
 }
 
 // ---------- 스타일 ----------
@@ -820,6 +884,10 @@ const styles = StyleSheet.create({
   resultTitle: { fontSize: 22, fontWeight: '900', color: Palette.ink, textAlign: 'center' },
   resultMessage: { fontSize: 14, lineHeight: 21, color: Palette.muted, textAlign: 'center' },
   empty: { alignItems: 'center', paddingVertical: 56, gap: 8 },
+  emptyCompact: { paddingVertical: 28 },
+  emptyAction: { marginTop: 8, paddingHorizontal: 20 },
+  loadingList: { gap: 10 },
+  loadingBlock: { borderRadius: 20, backgroundColor: Palette.chip },
   emptyTitle: { fontSize: 18, fontWeight: '700', color: Palette.ink },
   emptyMessage: { fontSize: 14, lineHeight: 21, color: Palette.muted, textAlign: 'center' },
 });

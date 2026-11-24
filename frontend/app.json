@@ -32,6 +32,13 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
+      ],
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "달린 거리와 경로를 기록하려면 위치 권한이 필요해요."
+        }
       ]
     ],
     "experiments": {

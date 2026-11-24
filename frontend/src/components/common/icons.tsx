@@ -103,33 +103,6 @@ export function EyeIcon(props: IconProps) {
   );
 }
 
-// 화면 왼쪽 위 뒤로가기 화살표 (<)
-export function ChevronLeftIcon(props: IconProps) {
-  return (
-    <LineIcon {...props}>
-      <Path d="M15 5l-7 7 7 7" />
-    </LineIcon>
-  );
-}
-
-// 목록 줄 오른쪽의 "더 들어갈 수 있음" 화살표 (>)
-export function ChevronRightIcon(props: IconProps) {
-  return (
-    <LineIcon {...props}>
-      <Path d="M9 5l7 7-7 7" />
-    </LineIcon>
-  );
-}
-
-// 체크 표시 (조건 충족, 체크박스, 완료 화면)
-export function CheckIcon(props: IconProps) {
-  return (
-    <LineIcon {...props}>
-      <Path d="M5 12.5l4.5 4.5L19 7.5" />
-    </LineIcon>
-  );
-}
-
 export function PlayIcon({ color, size = 18 }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">

@@ -1,11 +1,13 @@
+import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EyeIcon } from '@/components/common/icons';
 import { Palette } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
+import { api, errorMessage, type TokenResponse } from '@/lib/api';
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
@@ -14,15 +16,23 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
+    if (busy) return;
     if (!email.trim() || !password) {
       setError('이메일과 비밀번호를 입력해 주세요.');
       return;
     }
-    // TODO: 서버 로그인 API가 생기면 여기서 요청하고, 실패하면
-    // '이메일 또는 비밀번호가 맞지 않아요. 다시 확인해 주세요.'를 보여준다
-    signIn();
+    setBusy(true);
+    try {
+      signIn(await api.post<TokenResponse>('/api/auth/login', { email: email.trim(), password }));
+    } catch (e) {
+      // 서버가 '이메일 또는 비밀번호가 맞지 않아요.' 같은 문장을 돌려준다
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -95,18 +105,21 @@ export default function LoginScreen() {
       </View>
 
       <View style={styles.bottom}>
-        <Pressable style={styles.loginButton} onPress={handleLogin} accessibilityRole="button">
-          <Text style={styles.loginLabel}>로그인</Text>
+        <Pressable
+          style={[styles.loginButton, busy && styles.loginButtonBusy]}
+          onPress={handleLogin}
+          accessibilityRole="button"
+          accessibilityState={{ busy }}>
+          {busy ? <ActivityIndicator color={Palette.background} /> : <Text style={styles.loginLabel}>로그인</Text>}
         </Pressable>
 
-        {/* TODO: 회원가입 화면이 생기면 연결 */}
-        <Pressable style={styles.signUpRow} accessibilityRole="button">
+        <Pressable style={styles.signUpRow} onPress={() => router.push('/signup')} accessibilityRole="button">
           <Text style={styles.signUpHint}>아직 계정이 없나요?</Text>
           <Text style={styles.signUpLink}>회원가입</Text>
         </Pressable>
 
-        {/* TODO: 계정 없이 시작 안내 팝업이 생기면 연결 (지금은 바로 홈으로) */}
-        <Pressable onPress={signIn} accessibilityRole="button">
+        {/* 계정 없이 둘러보기: 코스·크루·글은 볼 수 있고, 저장·가입 같은 버튼을 누르면 로그인 화면으로 온다 */}
+        <Pressable onPress={() => signIn()} accessibilityRole="button">
           <Text style={[styles.linkText, styles.underline]}>계정 없이 시작하기</Text>
         </Pressable>
       </View>
@@ -196,6 +209,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: Palette.ink,
+  },
+  loginButtonBusy: {
+    opacity: 0.7,
   },
   loginLabel: {
     fontSize: 17,

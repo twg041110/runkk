@@ -1,36 +1,45 @@
+import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { Avatar, Button, Chip, Sheet, Stepper, shared } from '@/components/common/ui';
+import { Avatar, Button, Chip, EmptyState, Sheet, Stepper, shared } from '@/components/common/ui';
 import { Palette } from '@/constants/theme';
-import type { Course } from '@/data/courses';
-import { FRIENDS, getFriend } from '@/data/friends';
-import { actions, useAppStore } from '@/hooks/use-app-store';
+import { errorMessage } from '@/lib/api';
+import type { Course } from '@/lib/courses';
+import { pace as paceText, toServerDateTime } from '@/lib/format';
+import { sendRunInvite, useFriends, useInvites } from '@/lib/friends';
 
 const WEEK = ['일', '월', '화', '수', '목', '금', '토'];
 const MINUTES = ['00', '10', '20', '30', '40', '50'];
 
 /**
  * 같이 달리기 초대 시트.
- * 1단계: 초대할 친구 고르기 (friendId 를 주면 건너뜀)
- * 2단계: 날짜 · 시간 · 만나는 곳 · 목표 페이스 정하기
+ * 1단계: 초대할 친구 고르기 (friend 를 주면 건너뜀)
+ * 2단계: 날짜 · 시간 · 목표 페이스 정하고 보내기 → 친구에게 알림이 간다
  */
 export function InviteSheet({
   visible,
   course,
-  friendId,
+  friend,
   onClose,
   onSent,
 }: {
   visible: boolean;
-  course: Course;
-  friendId?: string;
+  course?: Course;
+  friend?: { memberId: number; name: string };
   onClose: () => void;
   onSent: (friendName: string, when: string) => void;
 }) {
-  const invited = useAppStore((s) => s.invitedFriends);
-  const [picked, setPicked] = useState<string | null>(null);
-  const target = friendId ?? picked;
+  const friendsQuery = useFriends(visible && !friend);
+  const invitesQuery = useInvites(visible && !friend);
+  const [picked, setPicked] = useState<{ memberId: number; name: string } | null>(null);
+  const target = friend ?? picked;
+  // 이 코스로 이미 초대를 보내 대기 중인 친구
+  const invited = new Set(
+    (invitesQuery.data?.sent ?? [])
+      .filter((i) => i.status === 'PENDING' && (course ? i.courseId === course.courseId : true))
+      .map((i) => i.invitee.memberId),
+  );
 
   const close = () => {
     setPicked(null);
@@ -42,10 +51,16 @@ export function InviteSheet({
       {target ? (
         <TimeStep
           course={course}
-          friendName={getFriend(target).name}
-          onSend={(when) => {
-            actions.inviteFriend(target);
-            onSent(getFriend(target).name, when);
+          friendName={target.name}
+          onSend={async (runAt, when, targetPaceSec) => {
+            await sendRunInvite({
+              inviteeId: target.memberId,
+              courseId: course?.courseId ?? null,
+              runAt,
+              meetingPlace: course ? meetingPlace(course) : null,
+              targetPaceSec,
+            });
+            onSent(target.name, when);
             close();
           }}
         />
@@ -54,36 +69,61 @@ export function InviteSheet({
           <View>
             <Text style={shared.sheetTitle}>같이 달릴 친구 초대</Text>
             <Text style={shared.sheetCaption}>
-              {course.name} {course.distanceKm}km · 초대받은 친구에게 알림이 가요
+              {course ? `${course.name} ${course.distanceKm}km · ` : ''}초대받은 친구에게 알림이 가요
             </Text>
           </View>
-          <View>
-            {FRIENDS.slice(0, 5).map((friend) => {
-              const done = invited.includes(friend.id);
-              return (
-                <View key={friend.id} style={styles.friendRow}>
-                  <Avatar name={friend.name} size={40} />
-                  <View style={styles.friendText}>
-                    <Text style={styles.friendName}>{friend.name}</Text>
-                    <Text style={styles.friendSub}>
-                      {friend.status === 'running' ? '지금 러닝 중' : `최근 러닝 · ${friend.recent[0]?.date ?? '기록 없음'}`}
-                    </Text>
+          {friendsQuery.data === undefined ? (
+            friendsQuery.error ? (
+              <Text style={styles.error}>{friendsQuery.error}</Text>
+            ) : (
+              <ActivityIndicator color={Palette.ink} style={styles.loading} />
+            )
+          ) : friendsQuery.data.length === 0 ? (
+            <EmptyState
+              compact
+              title="아직 친구가 없어요"
+              message="친구를 추가하면 같이 달리자고 초대할 수 있어요"
+              action={{
+                label: '친구 추가하기',
+                onPress: () => {
+                  close();
+                  router.push('/friend/add');
+                },
+              }}
+            />
+          ) : (
+            <View>
+              {friendsQuery.data.slice(0, 6).map((f) => {
+                const sent = invited.has(f.memberId);
+                return (
+                  <View key={f.id} style={styles.friendRow}>
+                    <Avatar name={f.name} size={40} />
+                    <View style={styles.friendText}>
+                      <Text style={styles.friendName}>{f.name}</Text>
+                      <Text style={styles.friendSub}>
+                        {f.weeklyRuns > 0 ? `이번 주 ${f.weeklyKm.toFixed(1)}km 달렸어요` : '이번 주 아직 기록 없음'}
+                      </Text>
+                    </View>
+                    <Pressable
+                      onPress={() => !sent && setPicked({ memberId: f.memberId, name: f.name })}
+                      style={[styles.inviteButton, sent && styles.inviteDone]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${f.name} 초대`}>
+                      <Text style={[styles.inviteText, sent && styles.inviteDoneText]}>{sent ? '초대함' : '초대'}</Text>
+                    </Pressable>
                   </View>
-                  <Pressable
-                    onPress={() => !done && setPicked(friend.id)}
-                    style={[styles.inviteButton, done && styles.inviteDone]}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${friend.name} 초대`}>
-                    <Text style={[styles.inviteText, done && styles.inviteDoneText]}>{done ? '초대함' : '초대'}</Text>
-                  </Pressable>
-                </View>
-              );
-            })}
-          </View>
+                );
+              })}
+            </View>
+          )}
         </>
       )}
     </Sheet>
   );
+}
+
+function meetingPlace(course: Course) {
+  return course.start.split('·')[1]?.replace('출발', '').trim() || course.town || course.name;
 }
 
 function TimeStep({
@@ -91,9 +131,9 @@ function TimeStep({
   friendName,
   onSend,
 }: {
-  course: Course;
+  course?: Course;
   friendName: string;
-  onSend: (when: string) => void;
+  onSend: (runAt: string, when: string, targetPaceSec: number) => Promise<void>;
 }) {
   const today = new Date();
   const year = today.getFullYear();
@@ -105,19 +145,38 @@ function TimeStep({
   const [hour, setHour] = useState(7);
   const [minute, setMinute] = useState('00');
   const [pace, setPace] = useState(370); // 초 단위 (6'10")
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
 
   const cells: (number | null)[] = [...Array(firstDay).fill(null), ...Array.from({ length: days }, (_, i) => i + 1)];
-  const paceText = `${Math.floor(pace / 60)}'${String(pace % 60).padStart(2, '0')}"`;
   const weekday = WEEK[new Date(year, month, day).getDay()];
   const when = `${month + 1}.${day} (${weekday}) ${ampm} ${hour}:${minute}`;
+  const hour24 = (hour % 12) + (ampm === '오후' ? 12 : 0);
+  const runAt = new Date(year, month, day, hour24, Number(minute));
+  const past = runAt.getTime() <= Date.now();
+
+  const send = async () => {
+    if (busy) return;
+    if (past) {
+      setError('지난 시간으로는 초대할 수 없어요. 시간을 다시 골라 주세요.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    try {
+      await onSend(toServerDateTime(runAt), when, pace);
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <>
       <View>
         <Text style={shared.sheetTitle}>{friendName}님과 언제 달릴까요?</Text>
-        <Text style={shared.sheetCaption}>
-          {course.name} {course.distanceKm}km
-        </Text>
+        <Text style={shared.sheetCaption}>{course ? `${course.name} ${course.distanceKm}km` : '자유 러닝'}</Text>
       </View>
 
       <View style={styles.block}>
@@ -132,19 +191,19 @@ function TimeStep({
             </Text>
           ))}
           {cells.map((n, i) => {
-            const past = n !== null && n < today.getDate();
+            const pastDay = n !== null && n < today.getDate();
             const selected = n === day;
             return (
               <Pressable
                 key={i}
-                disabled={n === null || past}
+                disabled={n === null || pastDay}
                 onPress={() => n && setDay(n)}
                 style={styles.dayCell}
                 accessibilityRole="button"
-                accessibilityState={{ selected, disabled: past }}>
+                accessibilityState={{ selected, disabled: pastDay }}>
                 {n ? (
                   <View style={[styles.dayCircle, selected && styles.daySelected]}>
-                    <Text style={[styles.dayText, past && styles.dayPast, selected && styles.daySelectedText]}>{n}</Text>
+                    <Text style={[styles.dayText, pastDay && styles.dayPast, selected && styles.daySelectedText]}>{n}</Text>
                   </View>
                 ) : null}
               </Pressable>
@@ -177,13 +236,13 @@ function TimeStep({
         <View style={styles.meetBox}>
           <Text style={styles.meetLabel}>만나는 곳</Text>
           <Text style={styles.meetValue} numberOfLines={1}>
-            {course.start.split('·')[1]?.replace('출발', '').trim() ?? course.town}
+            {course ? meetingPlace(course) : '만나서 정해요'}
           </Text>
         </View>
         <View style={styles.meetBox}>
           <Text style={styles.meetLabel}>목표 페이스</Text>
           <View style={styles.paceRow}>
-            <Text style={styles.meetValue}>{paceText} /km</Text>
+            <Text style={styles.meetValue}>{paceText(pace)} /km</Text>
             <Pressable onPress={() => setPace((p) => Math.max(240, p - 10))} hitSlop={8} accessibilityLabel="페이스 빠르게">
               <Text style={styles.paceButton}>−</Text>
             </Pressable>
@@ -194,13 +253,22 @@ function TimeStep({
         </View>
       </View>
 
-      <Button label={`${friendName}님에게 초대 보내기`} tone="dark" height={54} onPress={() => onSend(when)} />
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+      <Button
+        label={busy ? '보내는 중…' : `${friendName}님에게 초대 보내기`}
+        tone="dark"
+        height={54}
+        disabled={busy}
+        onPress={send}
+      />
     </>
   );
 }
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  loading: { paddingVertical: 24 },
+  error: { fontSize: 13, fontWeight: '600', color: Palette.alert },
   friendRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
   friendText: { flex: 1, gap: 2 },
   friendName: { fontSize: 15, fontWeight: '700', color: Palette.ink },

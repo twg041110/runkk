@@ -53,6 +53,13 @@ public class CourseController {
         return service.detail(CurrentUser.idOrNull(jwt), courseId);
     }
 
+    /** 이 코스에서 나와 친구들의 가장 빠른 기록 (기록 비교 화면) */
+    @GetMapping("/{courseId}/records")
+    public java.util.List<com.example.runkk.run.RunDto.RecordItem> records(@AuthenticationPrincipal Jwt jwt,
+            @PathVariable Long courseId) {
+        return service.records(CurrentUser.id(jwt), courseId);
+    }
+
     @PostMapping("/{courseId}/save")
     public ResponseEntity<Void> save(@AuthenticationPrincipal Jwt jwt, @PathVariable Long courseId) {
         service.save(CurrentUser.id(jwt), courseId);

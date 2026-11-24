@@ -44,6 +44,31 @@ public final class RunRepositories {
                 """)
         List<Object[]> runnersByCourses(@Param("ids") Collection<Long> courseIds, @Param("from") LocalDateTime from);
 
+        /** [거리 합계, 횟수, 시간 합계, 첫 기록 시각] (from 이후) */
+        @Query("""
+                select coalesce(sum(r.distanceKm), 0), count(r), coalesce(sum(r.durationSec), 0), min(r.startedAt)
+                from RunRecord r where r.member.memberId = :memberId and r.startedAt >= :from
+                """)
+        List<Object[]> totals(@Param("memberId") Long memberId, @Param("from") LocalDateTime from);
+
+        List<RunRecord> findTop5ByMemberMemberIdOrderByStartedAtDesc(Long memberId);
+
+        /** 이 코스를 달린 기록 (나와 친구들) */
+        @Query("select r from RunRecord r join fetch r.member where r.course.courseId = :courseId and r.member.memberId in :ids")
+        List<RunRecord> findOnCourse(@Param("courseId") Long courseId, @Param("ids") Collection<Long> memberIds);
+
+        @Query("select r from RunRecord r join fetch r.member where r.invite.inviteId = :inviteId order by r.startedAt")
+        List<RunRecord> findByInvite(@Param("inviteId") Long inviteId);
+
+        /** 두 사람이 함께 달리기 초대로 달린 내 기록 [횟수, 거리 합계, 마지막 시각] */
+        @Query("""
+                select count(r), coalesce(sum(r.distanceKm), 0), max(r.startedAt) from RunRecord r
+                where r.member.memberId = :me and r.invite is not null
+                  and ((r.invite.inviter.memberId = :me and r.invite.invitee.memberId = :other)
+                    or (r.invite.inviter.memberId = :other and r.invite.invitee.memberId = :me))
+                """)
+        List<Object[]> together(@Param("me") Long me, @Param("other") Long other);
+
         @Modifying
         @Query("update RunRecord r set r.meetup = null where r.meetup.meetupId in :ids")
         void detachMeetups(@Param("ids") Collection<Long> meetupIds);

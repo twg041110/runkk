@@ -7,8 +7,11 @@ import {
   AvatarStack,
   Button,
   Card,
+  EmptyState,
   IconButton,
+  LoadingBlock,
   MoreLink,
+  QueryView,
   SubScreen,
   Tag,
   TopBar,
@@ -18,17 +21,53 @@ import { CourseMap } from '@/components/course/course-map';
 import { ReviewRow } from '@/components/course/review-row';
 import { InviteSheet } from '@/components/friend/invite-sheet';
 import { LevelColors, Palette } from '@/constants/theme';
-import { FRIEND_RECORDS, REVIEWS, getCourse } from '@/data/courses';
-import { actions, useAppStore } from '@/hooks/use-app-store';
+import { useAuth } from '@/hooks/use-auth';
+import { errorMessage } from '@/lib/api';
+import { setCourseSaved, useCourse, useCourseRecords, useReviews, type Course } from '@/lib/courses';
+import { duration } from '@/lib/format';
 
 export default function CourseDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const course = getCourse(id);
-  const saved = useAppStore((s) => s.savedCourses).includes(course.id);
-  const [inviteOpen, setInviteOpen] = useState(false);
+  const courseQuery = useCourse(id);
   const toast = useToast();
+
+  return (
+    <QueryView
+      query={courseQuery}
+      loading={
+        <SubScreen header={<TopBar title="코스 상세" />}>
+          <LoadingBlock height={210} count={3} />
+        </SubScreen>
+      }>
+      {(course) => <CourseDetail course={course} toast={toast} />}
+    </QueryView>
+  );
+}
+
+function CourseDetail({ course, toast }: { course: Course; toast: ReturnType<typeof useToast> }) {
+  const { me, requireLogin } = useAuth();
+  const [saved, setSaved] = useState(course.saved);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const reviewsQuery = useReviews(course.id);
+  const recordsQuery = useCourseRecords(course.id, !!me);
   const level = LevelColors[course.level];
-  const friendNames = Object.keys(FRIEND_RECORDS);
+  const friendRecords = (recordsQuery.data ?? []).filter((r) => !r.me);
+
+  const toggleSave = async () => {
+    if (!requireLogin()) return;
+    const next = !saved;
+    setSaved(next);
+    try {
+      await setCourseSaved(course.courseId, next);
+      toast.show(
+        next ? '저장한 코스에 추가했어요' : '저장을 취소했어요',
+        next ? { label: '보기', onPress: () => router.push('/courses/saved') } : undefined,
+      );
+    } catch (e) {
+      setSaved(!next);
+      toast.show(errorMessage(e));
+    }
+  };
 
   return (
     <SubScreen
@@ -36,16 +75,7 @@ export default function CourseDetailScreen() {
         <TopBar
           title="코스 상세"
           right={
-            <IconButton
-              label={saved ? '저장 취소' : '코스 저장'}
-              style={styles.whiteButton}
-              onPress={() => {
-                actions.toggleSavedCourse(course.id);
-                toast.show(saved ? '저장을 취소했어요' : '저장한 코스에 추가했어요', saved ? undefined : {
-                  label: '보기',
-                  onPress: () => router.push('/courses/saved'),
-                });
-              }}>
+            <IconButton label={saved ? '저장 취소' : '코스 저장'} style={styles.whiteButton} onPress={toggleSave}>
               <BookmarkIcon color={Palette.ink} filled={saved} />
             </IconButton>
           }
@@ -57,14 +87,14 @@ export default function CourseDetailScreen() {
             label="친구와 함께"
             tone="dark"
             icon={(color) => <PeopleIcon color={color} />}
-            onPress={() => setInviteOpen(true)}
+            onPress={() => requireLogin() && setInviteOpen(true)}
           />
           <Button
             label="이 코스로 달리기"
             tone="lime"
             flex
             icon={(color) => <PlaySmallIcon color={color} />}
-            onPress={() => router.dismissTo('/')}
+            onPress={() => requireLogin() && router.push({ pathname: '/run', params: { courseId: course.id } })}
           />
         </>
       }
@@ -90,15 +120,18 @@ export default function CourseDetailScreen() {
       <View style={styles.title}>
         <View style={styles.tags}>
           <Tag label={course.level} bg={level.bg} color={level.text} bold size={12} style={styles.tagPad} />
-          <View style={styles.ratingTag}>
-            <StarIcon size={12} />
-            <Text style={styles.ratingText}>
-              {course.rating} ({course.reviewCount})
-            </Text>
-          </View>
+          {course.reviewCount > 0 ? (
+            <View style={styles.ratingTag}>
+              <StarIcon size={12} />
+              <Text style={styles.ratingText}>
+                {course.rating} ({course.reviewCount})
+              </Text>
+            </View>
+          ) : null}
         </View>
         <Text style={styles.name}>{course.name}</Text>
         <Text style={styles.start}>{course.start}</Text>
+        {course.description ? <Text style={styles.description}>{course.description}</Text> : null}
       </View>
 
       <View style={styles.stats}>
@@ -116,40 +149,71 @@ export default function CourseDetailScreen() {
             </View>
           ))}
         </View>
-        <View style={styles.tip}>
-          <Text style={styles.tipText}>{course.tip}</Text>
-        </View>
+        {course.tip ? (
+          <View style={styles.tip}>
+            <Text style={styles.tipText}>{course.tip}</Text>
+          </View>
+        ) : null}
       </Card>
 
       <Card style={styles.gap12}>
         <Text style={styles.cardTitle}>이 코스를 달린 친구</Text>
-        <View style={styles.friendsRow}>
-          <AvatarStack names={friendNames.slice(0, 3)} extra={`+${friendNames.length - 3}`} />
-          <View style={styles.friendsText}>
-            <Text style={styles.friendsTitle} numberOfLines={2}>
-              {friendNames[0]} 님 외 {friendNames.length - 1}명이 달렸어요
-            </Text>
-            <Text style={styles.friendsSub}>
-              친구 최고 기록 · {friendNames[0]} {FRIEND_RECORDS[friendNames[0]].total}
-            </Text>
+        {!me ? (
+          <Text style={styles.friendsSub}>로그인하면 친구들의 이 코스 기록을 볼 수 있어요</Text>
+        ) : friendRecords.length === 0 ? (
+          <View style={styles.friendsRow}>
+            <View style={styles.friendsText}>
+              <Text style={styles.friendsTitle}>아직 이 코스를 달린 친구가 없어요</Text>
+              <Text style={styles.friendsSub}>친구를 초대해서 같이 달려 보세요</Text>
+            </View>
           </View>
-          <Pressable
-            onPress={() => router.push(`/courses/${course.id}/compare`)}
-            style={styles.compareButton}
-            accessibilityRole="button">
-            <Text style={styles.compareText}>기록 비교</Text>
-          </Pressable>
-        </View>
+        ) : (
+          <View style={styles.friendsRow}>
+            <AvatarStack
+              names={friendRecords.slice(0, 3).map((r) => r.member.nickname)}
+              extra={friendRecords.length > 3 ? `+${friendRecords.length - 3}` : undefined}
+            />
+            <View style={styles.friendsText}>
+              <Text style={styles.friendsTitle} numberOfLines={2}>
+                {friendRecords.length === 1
+                  ? `${friendRecords[0].member.nickname} 님이 달렸어요`
+                  : `${friendRecords[0].member.nickname} 님 외 ${friendRecords.length - 1}명이 달렸어요`}
+              </Text>
+              <Text style={styles.friendsSub}>
+                친구 최고 기록 · {friendRecords[0].member.nickname} {duration(friendRecords[0].durationSec)}
+              </Text>
+            </View>
+            <Pressable
+              onPress={() => router.push(`/courses/${course.id}/compare`)}
+              style={styles.compareButton}
+              accessibilityRole="button">
+              <Text style={styles.compareText}>기록 비교</Text>
+            </Pressable>
+          </View>
+        )}
       </Card>
 
       <Card style={styles.reviews}>
         <View style={styles.reviewHead}>
-          <Text style={styles.cardTitle}>코스 후기 {course.reviewCount}</Text>
-          <MoreLink label="후기 더보기" onPress={() => router.push(`/courses/${course.id}/reviews`)} />
+          <Text style={styles.cardTitle}>코스 후기 {reviewsQuery.data?.total ?? course.reviewCount}</Text>
+          <MoreLink
+            label={(reviewsQuery.data?.total ?? 0) > 0 ? '후기 더보기' : '후기 쓰기'}
+            onPress={() => router.push(`/courses/${course.id}/reviews`)}
+          />
         </View>
-        {REVIEWS.slice(0, 2).map((review, index) => (
-          <ReviewRow key={review.name} review={review} last={index === 1} />
-        ))}
+        <QueryView query={reviewsQuery} loading={<LoadingBlock height={56} />}>
+          {({ reviews }) =>
+            reviews.length === 0 ? (
+              <EmptyState compact title="아직 후기가 없어요" message="달려 본 느낌을 처음으로 남겨 주세요" />
+            ) : (
+              <>
+                {reviews.slice(0, 2).map((review, index, list) => (
+                  <ReviewRow key={review.id} review={review} last={index === list.length - 1} />
+                ))}
+              </>
+            )
+          }
+        </QueryView>
       </Card>
     </SubScreen>
   );
@@ -184,6 +248,7 @@ const styles = StyleSheet.create({
   ratingText: { fontSize: 12, fontWeight: '500', color: Palette.inkSoft },
   name: { fontSize: 24, fontWeight: '900', color: Palette.ink },
   start: { fontSize: 13, color: Palette.muted },
+  description: { fontSize: 14, lineHeight: 21, color: Palette.inkSoft, marginTop: 4 },
   stats: { flexDirection: 'row', gap: 8 },
   stat: {
     flex: 1,

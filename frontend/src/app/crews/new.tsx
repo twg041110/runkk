@@ -1,74 +1,130 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { ChevronDownIcon, ChevronRightIcon } from '@/components/common/icons';
-import { Button, Chip, Sheet, Stepper, SubScreen, TopBar, shared } from '@/components/common/ui';
+import { Button, Chip, Sheet, Stepper, SubScreen, TopBar, shared, useToast } from '@/components/common/ui';
 import { Palette } from '@/constants/theme';
-import { AGES, DAYS, GENDERS, PACE_OPTIONS, REGIONS, ruleText } from '@/data/crews';
-import { actions } from '@/hooks/use-app-store';
+import { errorMessage, type GenderLimit, type JoinType } from '@/lib/api';
+import { AGES, DAYS, GENDERS, JOIN_TYPES, PACE_OPTIONS, REGIONS, ageRange, ruleText } from '@/lib/crew-options';
+import { createCrew } from '@/lib/crews';
+
+const TAG_OPTIONS = ['초보 환영', '새벽', '퇴근런', '주말', '직장인', '대회 준비'];
 
 export default function NewCrewScreen() {
+  const toast = useToast();
   const [name, setName] = useState('');
   const [region, setRegion] = useState<string | null>(null);
+  const [place, setPlace] = useState('');
   const [pace, setPace] = useState(PACE_OPTIONS[2]);
   const [days, setDays] = useState<string[]>(['토']);
+  const [hour, setHour] = useState(7);
   const [capacity, setCapacity] = useState(20);
-  const [gender, setGender] = useState('제한 없음');
-  const [ages, setAges] = useState<string[]>(['20대', '30대']);
+  const [gender, setGender] = useState<GenderLimit>('NONE');
+  const [ages, setAges] = useState<string[]>([]);
+  const [joinType, setJoinType] = useState<JoinType>('APPROVAL');
+  const [tags, setTags] = useState<string[]>([]);
   const [intro, setIntro] = useState('');
   const [regionOpen, setRegionOpen] = useState(false);
   const [ruleOpen, setRuleOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
 
-  const ready = name.trim().length > 0 && region !== null && days.length > 0;
-  const rule = ruleText(gender, ages);
+  const ready = name.trim().length >= 2 && region !== null && days.length > 0;
+  const rule = ruleText(gender, ages, joinType);
+
+  const submit = async () => {
+    if (!ready || busy) return;
+    setBusy(true);
+    try {
+      const crew = await createCrew({
+        name: name.trim(),
+        region,
+        meetingPlace: place.trim() || null,
+        intro: intro.trim() || null,
+        avgPaceSec: pace.sec,
+        meetingDays: DAYS.filter((d) => days.includes(d)).join(','),
+        meetingTime: `${String(hour).padStart(2, '0')}:00:00`,
+        maxMembers: capacity,
+        joinType,
+        genderLimit: gender,
+        ...ageRange(ages),
+        recruiting: true,
+        tags,
+      });
+      router.replace({
+        pathname: '/crews/done',
+        params: { type: 'created', id: crew.id, name: crew.name, capacity: String(capacity), rule },
+      });
+    } catch (e) {
+      toast.show(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <SubScreen
       header={<TopBar variant="plain" close title="크루 만들기" />}
       bottom={
         <Button
-          label="크루 만들기"
+          label={busy ? '만드는 중…' : '크루 만들기'}
           tone="darkLime"
           height={56}
           radius={28}
           fontSize={16}
           flex
-          disabled={!ready}
-          onPress={() => {
-            actions.createCrew({ name: name.trim(), region: region ?? '', capacity, rule });
-            router.replace({ pathname: '/crews/done', params: { type: 'created' } });
-          }}
+          disabled={!ready || busy}
+          onPress={submit}
         />
       }
       overlay={
         <>
           <Sheet visible={regionOpen} onClose={() => setRegionOpen(false)}>
             <Text style={shared.sheetTitle}>활동 지역 선택</Text>
-            {REGIONS.map((item) => (
-              <Pressable
-                key={item}
-                onPress={() => {
-                  setRegion(item);
-                  setRegionOpen(false);
-                }}
-                style={styles.regionRow}
-                accessibilityRole="button"
-                accessibilityState={{ selected: region === item }}>
-                <Text style={[styles.regionText, region === item && styles.regionOn]}>서울 {item}</Text>
-                {region === item ? <Text style={styles.regionCheck}>선택됨</Text> : null}
-              </Pressable>
-            ))}
+            <ScrollView style={styles.regionList}>
+              {REGIONS.map((item) => (
+                <Pressable
+                  key={item}
+                  onPress={() => {
+                    setRegion(item);
+                    setRegionOpen(false);
+                  }}
+                  style={styles.regionRow}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: region === item }}>
+                  <Text style={[styles.regionText, region === item && styles.regionOn]}>{item}</Text>
+                  {region === item ? <Text style={styles.regionCheck}>선택됨</Text> : null}
+                </Pressable>
+              ))}
+            </ScrollView>
           </Sheet>
           <Sheet visible={ruleOpen} onClose={() => setRuleOpen(false)}>
             <Text style={shared.sheetTitle}>가입 조건</Text>
+            <Text style={shared.fieldLabel}>가입 방식</Text>
+            <View style={styles.chips}>
+              {JOIN_TYPES.map((item) => (
+                <Chip
+                  key={item.value}
+                  label={item.label}
+                  selected={joinType === item.value}
+                  onPress={() => setJoinType(item.value)}
+                  selectedTextColor={Palette.accent}
+                />
+              ))}
+            </View>
             <Text style={shared.fieldLabel}>성별</Text>
             <View style={styles.chips}>
               {GENDERS.map((item) => (
-                <Chip key={item} label={item} selected={gender === item} onPress={() => setGender(item)} selectedTextColor={Palette.accent} />
+                <Chip
+                  key={item.value}
+                  label={item.label}
+                  selected={gender === item.value}
+                  onPress={() => setGender(item.value)}
+                  selectedTextColor={Palette.accent}
+                />
               ))}
             </View>
-            <Text style={shared.fieldLabel}>나이</Text>
+            <Text style={shared.fieldLabel}>나이 (고르지 않으면 제한 없음)</Text>
             <View style={styles.chips}>
               {AGES.map((item) => (
                 <Chip
@@ -83,6 +139,7 @@ export default function NewCrewScreen() {
             <Text style={shared.label12}>선택한 조건에 맞는 사람만 가입 신청할 수 있어요</Text>
             <Button label="저장" tone="darkLime" height={52} radius={26} onPress={() => setRuleOpen(false)} />
           </Sheet>
+          {toast.node}
         </>
       }>
       <View style={styles.field}>
@@ -100,16 +157,35 @@ export default function NewCrewScreen() {
       <Pressable onPress={() => setRegionOpen(true)} style={styles.field} accessibilityRole="button">
         <Text style={styles.fieldLabel}>활동 지역</Text>
         <View style={styles.row}>
-          <Text style={[styles.value, !region && { color: Palette.hint }]}>{region ? `서울 ${region}` : '지역을 선택하세요'}</Text>
+          <Text style={[styles.value, !region && { color: Palette.hint }]}>{region ?? '지역을 선택하세요'}</Text>
           <ChevronDownIcon color={Palette.ink} size={18} />
         </View>
       </Pressable>
+
+      <View style={styles.field}>
+        <Text style={styles.fieldLabel}>모이는 곳 (선택)</Text>
+        <TextInput
+          style={styles.input}
+          value={place}
+          onChangeText={setPlace}
+          placeholder="여의나루역 2번 출구"
+          placeholderTextColor={Palette.hint}
+          maxLength={100}
+        />
+      </View>
 
       <View style={styles.group}>
         <Text style={shared.fieldLabel}>평균 페이스</Text>
         <View style={styles.chips}>
           {PACE_OPTIONS.map((item) => (
-            <Chip key={item} label={item} size="sm" selected={pace === item} onPress={() => setPace(item)} selectedTextColor={Palette.accent} />
+            <Chip
+              key={item.label}
+              label={item.label}
+              size="sm"
+              selected={pace.label === item.label}
+              onPress={() => setPace(item)}
+              selectedTextColor={Palette.accent}
+            />
           ))}
         </View>
       </View>
@@ -134,12 +210,22 @@ export default function NewCrewScreen() {
       </View>
 
       <View style={[styles.field, styles.rowField]}>
+        <Text style={styles.rowLabel}>모임 시간</Text>
+        <Stepper
+          value={`${hour < 12 ? '오전' : '오후'} ${hour % 12 === 0 ? 12 : hour % 12}시`}
+          tone="gray"
+          onMinus={() => setHour((h) => (h + 23) % 24)}
+          onPlus={() => setHour((h) => (h + 1) % 24)}
+        />
+      </View>
+
+      <View style={[styles.field, styles.rowField]}>
         <Text style={styles.rowLabel}>모집 인원</Text>
         <Stepper
           value={`${capacity}명`}
           tone="gray"
           onMinus={() => setCapacity((c) => Math.max(2, c - 1))}
-          onPlus={() => setCapacity((c) => Math.min(50, c + 1))}
+          onPlus={() => setCapacity((c) => Math.min(100, c + 1))}
         />
       </View>
 
@@ -151,11 +237,32 @@ export default function NewCrewScreen() {
         <ChevronRightIcon color={Palette.ink} size={18} />
       </Pressable>
 
+      <View style={styles.group}>
+        <Text style={shared.fieldLabel}>크루 태그 (최대 3개)</Text>
+        <View style={styles.chips}>
+          {TAG_OPTIONS.map((tag) => {
+            const on = tags.includes(tag);
+            return (
+              <Chip
+                key={tag}
+                label={tag}
+                size="sm"
+                selected={on}
+                selectedTextColor={Palette.accent}
+                onPress={() =>
+                  setTags((list) => (on ? list.filter((t) => t !== tag) : list.length >= 3 ? list : [...list, tag]))
+                }
+              />
+            );
+          })}
+        </View>
+      </View>
+
       <TextInput
         style={[styles.field, styles.intro]}
         value={intro}
         onChangeText={setIntro}
-        placeholder="크루를 소개해주세요. 활동 방식과 분위기를 적으면 가입 신청이 늘어요."
+        placeholder="크루를 소개해 주세요. 활동 방식과 분위기를 적으면 가입 신청이 늘어요."
         placeholderTextColor={Palette.hint}
         multiline
         maxLength={300}
@@ -199,6 +306,7 @@ const styles = StyleSheet.create({
   rowField: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14 },
   rowLabel: { fontSize: 14, fontWeight: '500', color: Palette.ink },
   intro: { minHeight: 96, fontSize: 14, lineHeight: 21, color: Palette.ink, paddingTop: 14 },
+  regionList: { maxHeight: 360 },
   regionRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

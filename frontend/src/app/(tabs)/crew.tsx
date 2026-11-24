@@ -4,37 +4,62 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CloseIcon, FlagIcon, PlusIcon, SearchBoldIcon, SortIcon } from '@/components/common/icons';
-import { Button, Chip, DarkPill, EmptyState, IconButton, Sheet, TabHeader, Tag, shared } from '@/components/common/ui';
+import {
+  Button,
+  Chip,
+  DarkPill,
+  EmptyState,
+  IconButton,
+  LoadingBlock,
+  QueryView,
+  Sheet,
+  TabHeader,
+  Tag,
+  shared,
+} from '@/components/common/ui';
 import { Palette } from '@/constants/theme';
-import { CREWS, getCrew, meetingOf, type Crew } from '@/data/crews';
-import { useAppStore } from '@/hooks/use-app-store';
+import { useAuth } from '@/hooks/use-auth';
+import { REQUIRED_RUNS, meetupDay, useCrews, useMyCrew, type Crew } from '@/lib/crews';
 
 type Category = 'all' | 'nearby' | 'beginner';
 type Sort = '최신순' | '인원 많은순' | '자리 많은순';
 
 export default function CrewScreen() {
   const insets = useSafeAreaInsets();
-  const myCrew = useAppStore((s) => s.myCrew);
-  const pending = useAppStore((s) => s.pendingCrew);
-  const created = useAppStore((s) => s.createdCrew);
+  const { me, requireLogin } = useAuth();
+  const crewsQuery = useCrews();
+  const myCrewQuery = useMyCrew(!!me);
+  const myCrew = myCrewQuery.data?.crew ?? null;
+  const myStatus = myCrewQuery.data?.status ?? null;
   const [category, setCategory] = useState<Category>('all');
   const [sort, setSort] = useState<Sort>('최신순');
   const [sortOpen, setSortOpen] = useState(false);
   const [searching, setSearching] = useState(false);
   const [query, setQuery] = useState('');
 
-  let crews = CREWS.filter((crew) =>
-    category === 'nearby' ? crew.nearby : category === 'beginner' ? crew.beginner : true,
-  ).filter((crew) => crew.id !== myCrew);
+  const myRegion = me?.region?.trim() ?? '';
   const q = query.trim();
-  if (q) crews = crews.filter((crew) => `${crew.name} ${crew.area} ${crew.address}`.includes(q));
-  crews = [...crews].sort((a, b) =>
-    sort === '인원 많은순'
-      ? b.members - a.members
-      : sort === '자리 많은순'
-        ? b.capacity - b.members - (a.capacity - a.members)
-        : b.createdAt - a.createdAt,
-  );
+  // 서버가 최신순으로 주므로 '최신순'은 받은 순서 그대로 둔다
+  const pickCrews = (all: Crew[]) => {
+    let crews = all
+      .filter((crew) =>
+        category === 'nearby'
+          ? myRegion !== '' && (crew.address.includes(myRegion) || myRegion.includes(crew.area))
+          : category === 'beginner'
+            ? crew.beginner
+            : true,
+      )
+      .filter((crew) => crew.crewId !== myCrew?.crewId);
+    if (q) crews = crews.filter((crew) => `${crew.name} ${crew.address} ${crew.place} ${crew.intro}`.includes(q));
+    if (sort === '인원 많은순') crews = [...crews].sort((a, b) => b.members - a.members);
+    if (sort === '자리 많은순') crews = [...crews].sort((a, b) => b.capacity - b.members - (a.capacity - a.members));
+    return crews;
+  };
+
+  const openCreate = () => {
+    if (!requireLogin()) return;
+    router.push(myCrew ? { pathname: '/crews/done', params: { type: 'limit' } } : '/crews/new');
+  };
 
   return (
     <View style={styles.screen}>
@@ -93,46 +118,49 @@ export default function CrewScreen() {
         </View>
 
         {/* 내 크루 / 가입 대기 / 크루 없음 */}
-        {myCrew ? (
+        {myCrew && myStatus === 'JOINED' ? (
           <Pressable
-            onPress={() => router.push(myCrew === 'created' ? '/crews/manage' : `/crews/${myCrew}`)}
+            onPress={() => router.push(myCrew.iAmLeader ? { pathname: '/crews/manage', params: { id: myCrew.id } } : `/crews/${myCrew.id}`)}
             style={styles.myCrew}
             accessibilityRole="button">
             <View style={shared.rowBetween}>
               <Text style={styles.myLabel}>내 크루</Text>
               <Text style={styles.myDday}>
-                {myCrew === 'created' ? '크루장' : `다음 모임 ${meetingOf(getCrew(myCrew)).dday}`}
+                {myCrew.iAmLeader ? '크루장' : myCrew.nextMeetup ? `다음 모임 ${myCrew.badge}` : '모임 예정 없음'}
               </Text>
             </View>
-            <Text style={styles.myName}>{myCrew === 'created' ? created?.name : `${getCrew(myCrew).name} 크루`}</Text>
+            <Text style={styles.myName}>{myCrew.name}</Text>
             <Text style={styles.mySub}>
-              {myCrew === 'created'
-                ? `${created?.region} · 멤버 1 / ${created?.capacity}명 · 모임 예정 없음`
-                : `${meetingOf(getCrew(myCrew)).day} · ${getCrew(myCrew).place} · ${getCrew(myCrew).members}명 참여`}
+              {myCrew.nextMeetup
+                ? `${meetupDay(myCrew.nextMeetup.runAt)} · ${myCrew.nextMeetup.meetingPlace ?? myCrew.place} · ${myCrew.nextMeetup.attendingCount}명 참석`
+                : `${myCrew.address || myCrew.place} · 멤버 ${myCrew.members} / ${myCrew.capacity}명`}
             </Text>
           </Pressable>
-        ) : pending ? (
-          <Pressable onPress={() => router.push(`/crews/${pending}`)} style={styles.noCrew} accessibilityRole="button">
+        ) : myCrew && myStatus === 'PENDING' ? (
+          <Pressable onPress={() => router.push(`/crews/${myCrew.id}`)} style={styles.noCrew} accessibilityRole="button">
             <View style={styles.noCrewTop}>
-              <View style={[styles.flag, { backgroundColor: getCrew(pending).color }]}>
-                <Text style={styles.flagLetter}>{getCrew(pending).letter}</Text>
+              <View style={[styles.flag, { backgroundColor: myCrew.color }]}>
+                <Text style={styles.flagLetter}>{myCrew.letter}</Text>
               </View>
               <View style={styles.flex}>
-                <Text style={styles.noCrewTitle}>{getCrew(pending).name}</Text>
+                <Text style={styles.noCrewTitle}>{myCrew.name}</Text>
                 <Text style={styles.noCrewSub}>크루장이 승인하면 알려드릴게요</Text>
               </View>
               <DarkPill label="승인 대기 중" />
             </View>
           </Pressable>
         ) : (
-          <Pressable onPress={() => router.push('/crews/eligibility')} style={styles.noCrew} accessibilityRole="button">
+          <Pressable
+            onPress={() => requireLogin() && router.push('/crews/eligibility')}
+            style={styles.noCrew}
+            accessibilityRole="button">
             <View style={styles.noCrewTop}>
               <View style={styles.flag}>
                 <FlagIcon color={Palette.ink} />
               </View>
               <View style={styles.flex}>
-                <Text style={styles.noCrewTitle}>아직 가입한 크루가 없어요</Text>
-                <Text style={styles.noCrewSub}>1km 이상 러닝 5회를 채우면 가입할 수 있어요</Text>
+                <Text style={styles.noCrewTitle}>{me ? '아직 가입한 크루가 없어요' : '로그인하고 크루에 들어가 보세요'}</Text>
+                <Text style={styles.noCrewSub}>1km 이상 러닝 {REQUIRED_RUNS}회를 채우면 가입할 수 있어요</Text>
               </View>
             </View>
             <View style={styles.checkButton}>
@@ -146,19 +174,39 @@ export default function CrewScreen() {
           <Text style={styles.sortText}>{sort}</Text>
         </View>
 
-        {crews.length === 0 ? (
-          <EmptyState
-            title={q ? '찾는 크루가 없어요' : '조건에 맞는 크루가 없어요'}
-            message={'직접 크루를 만들어\n함께 달릴 사람을 모아보세요'}
-          />
-        ) : null}
-        {crews.map((crew) => (
-          <CrewCard key={crew.id} crew={crew} />
-        ))}
+        <QueryView query={crewsQuery} loading={<LoadingBlock height={124} count={3} />}>
+          {(all) => {
+            const crews = pickCrews(all);
+            if (crews.length === 0) {
+              return (
+                <EmptyState
+                  title={
+                    q
+                      ? '찾는 크루가 없어요'
+                      : category === 'nearby' && !myRegion
+                        ? '내 지역이 정해지지 않았어요'
+                        : all.length === 0
+                          ? '아직 만들어진 크루가 없어요'
+                          : all.every((crew) => crew.crewId === myCrew?.crewId)
+                            ? '다른 크루가 아직 없어요'
+                          : '조건에 맞는 크루가 없어요'
+                  }
+                  message={
+                    category === 'nearby' && !myRegion
+                      ? '내 정보에서 활동 지역을 정하면\n근처 크루를 찾아 드려요'
+                      : '직접 크루를 만들어\n함께 달릴 사람을 모아 보세요'
+                  }
+                  action={myCrew ? undefined : { label: '크루 만들기', onPress: openCreate }}
+                />
+              );
+            }
+            return crews.map((crew) => <CrewCard key={crew.id} crew={crew} />);
+          }}
+        </QueryView>
       </ScrollView>
 
       <Pressable
-        onPress={() => router.push(myCrew ? { pathname: '/crews/done', params: { type: 'limit' } } : '/crews/new')}
+        onPress={openCreate}
         style={[styles.fab, { bottom: insets.bottom + 108 }]}
         accessibilityRole="button"
         accessibilityLabel="크루 만들기">
@@ -198,23 +246,25 @@ function CrewCard({ crew }: { crew: Crew }) {
         <View style={styles.flex}>
           <Text style={styles.crewName}>{crew.name}</Text>
           <Text style={styles.crewSub}>
-            {crew.area} · {crew.pace}/km
+            {[crew.area, crew.dto.avgPaceSec ? `${crew.pace}/km` : null].filter(Boolean).join(' · ')}
           </Text>
         </View>
         <DarkPill label={crew.badge} />
       </View>
-      <View style={styles.tags}>
-        {crew.tags.map((tag) => (
-          <Tag
-            key={tag.label}
-            label={tag.label}
-            bg={tag.color ?? '#E6E8EE'}
-            color={Palette.ink}
-            bold
-            style={styles.tagPill}
-          />
-        ))}
-      </View>
+      {crew.tags.length > 0 ? (
+        <View style={styles.tags}>
+          {crew.tags.map((tag) => (
+            <Tag
+              key={tag.label}
+              label={tag.label}
+              bg={tag.color ?? '#E6E8EE'}
+              color={Palette.ink}
+              bold
+              style={styles.tagPill}
+            />
+          ))}
+        </View>
+      ) : null}
       <View style={shared.rowBetween}>
         <Text style={styles.crewMeta}>
           멤버 {crew.members} / {crew.capacity}명

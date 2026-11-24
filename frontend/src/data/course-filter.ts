@@ -1,9 +1,11 @@
-import { COURSES, type Course } from '@/data/courses';
+import type { Course, Terrain } from '@/lib/courses';
+
+// 코스 필터 (거리·시간·지형·편의시설). 코스 목록은 서버에서 받고, 거르는 건 화면에서 한다.
 
 export type CourseFilter = {
   distance: '전체' | '3km 이하' | '3~5km' | '5~10km' | '10km 이상';
   time: '30분 이하' | '30분~1시간' | '1시간 이상' | null;
-  terrain: Course['terrain'] | null;
+  terrain: Terrain | null;
   amenities: string[];
 };
 
@@ -22,8 +24,8 @@ const inTime = (min: number, t: CourseFilter['time']) =>
   (t === '30분~1시간' && min > 30 && min <= 60) ||
   (t === '1시간 이상' && min > 60);
 
-export function filterCourses(filter: CourseFilter): Course[] {
-  return COURSES.filter(
+export function filterCourses(courses: Course[], filter: CourseFilter): Course[] {
+  return courses.filter(
     (course) =>
       inDistance(course.distanceKm, filter.distance) &&
       inTime(course.minutes, filter.time) &&

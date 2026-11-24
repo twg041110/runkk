@@ -232,6 +232,49 @@ public class RunService {
         i.setStatus(RunInvite.Status.CANCELED);
     }
 
+    /**
+     * 회원의 러닝 통계. 나 자신이나 친구일 때만 기록을 보여 주고,
+     * 친구가 아니면 프로필만 보여 준다 (friend=false, 숫자는 0).
+     */
+    public RunDto.FriendStats stats(Long me, Long memberId) {
+        memberService.getActive(me);
+        Member target = memberService.getOther(memberId);
+        boolean self = me.equals(memberId);
+        boolean friend = self || friends.areFriends(me, memberId);
+        if (!friend) {
+            return new RunDto.FriendStats(com.example.runkk.member.MemberDto.Profile.of(target), false,
+                    BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, 0, null, null, List.of(), 0, BigDecimal.ZERO,
+                    null);
+        }
+        LocalDate today = LocalDate.now();
+        Object[] all = records.totals(memberId, LocalDateTime.of(2000, 1, 1, 0, 0)).get(0);
+        Object[] week = records.totals(memberId,
+                today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)).atStartOfDay()).get(0);
+        Object[] month = records.totals(memberId, today.withDayOfMonth(1).atStartOfDay()).get(0);
+        BigDecimal totalKm = (BigDecimal) all[0];
+        long totalSec = ((Number) all[2]).longValue();
+        Integer avgPace = totalKm.signum() > 0
+                ? BigDecimal.valueOf(totalSec).divide(totalKm, 0, RoundingMode.HALF_UP).intValue()
+                : null;
+        Object[] together = self ? new Object[] { 0L, BigDecimal.ZERO, null }
+                : records.together(me, memberId).get(0);
+        return new RunDto.FriendStats(com.example.runkk.member.MemberDto.Profile.of(target), true, totalKm,
+                (BigDecimal) week[0], (BigDecimal) month[0], ((Number) all[1]).longValue(), avgPace,
+                (LocalDateTime) all[3],
+                records.findTop5ByMemberMemberIdOrderByStartedAtDesc(memberId).stream().map(RunDto.Summary::of)
+                        .toList(),
+                ((Number) together[0]).longValue(), (BigDecimal) together[1], (LocalDateTime) together[2]);
+    }
+
+    /** 함께 달리기 초대 하나와, 그 초대로 두 사람이 남긴 기록 */
+    public RunDto.InviteRecords inviteDetail(Long me, Long inviteId) {
+        RunInvite i = invites.findById(inviteId)
+                .filter(found -> found.getInviter().getMemberId().equals(me) || found.getInvitee().getMemberId().equals(me))
+                .orElseThrow(() -> ApiException.notFound("초대를 찾을 수 없어요."));
+        return new RunDto.InviteRecords(RunDto.Invite.of(i),
+                records.findByInvite(inviteId).stream().map(r -> RunDto.RecordItem.of(r, me)).toList());
+    }
+
     // ===== 내부 도우미 =====
 
     private RunRecord mine(Long me, Long recordId) {

@@ -2,44 +2,81 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { Button, ConfirmDialog, DarkPill, SubScreen, TopBar } from '@/components/common/ui';
+import {
+  Button,
+  ConfirmDialog,
+  DarkPill,
+  LoadingBlock,
+  QueryView,
+  SubScreen,
+  TopBar,
+  useToast,
+} from '@/components/common/ui';
 import { CrewAbout, CrewCard, CrewHero, CrewInfo, CrewMembers } from '@/components/crew/crew-parts';
 import { Palette } from '@/constants/theme';
-import { MY_RUNS, REQUIRED_RUNS, getCrew, meetingOf } from '@/data/crews';
-import { actions, useAppStore } from '@/hooks/use-app-store';
+import { useAuth } from '@/hooks/use-auth';
+import { errorMessage } from '@/lib/api';
+import { joinCrew, leaveCrew, meetupDay, useCrew, type CrewDetail } from '@/lib/crews';
 
 export default function CrewDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const crew = getCrew(id);
-  const myCrew = useAppStore((s) => s.myCrew);
-  const pending = useAppStore((s) => s.pendingCrew);
-  const joinedMeeting = useAppStore((s) => s.joinedMeeting);
-  const [leaveOpen, setLeaveOpen] = useState(false);
-  const mine = myCrew === crew.id;
-  const isPending = pending === crew.id;
-  const meeting = meetingOf(crew);
+  const crewQuery = useCrew(id);
+  return (
+    <QueryView
+      query={crewQuery}
+      loading={
+        <SubScreen header={<TopBar variant="plain" title="크루 상세" />}>
+          <LoadingBlock height={160} count={3} />
+        </SubScreen>
+      }>
+      {(crew) => <CrewDetailView crew={crew} />}
+    </QueryView>
+  );
+}
 
-  const apply = () => {
-    if (myCrew) {
-      router.push({ pathname: '/crews/done', params: { type: 'limit' } });
-      return;
+function CrewDetailView({ crew }: { crew: CrewDetail }) {
+  const { requireLogin } = useAuth();
+  const toast = useToast();
+  const [leaveOpen, setLeaveOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const mine = crew.myStatus === 'JOINED';
+  const isPending = crew.myStatus === 'PENDING';
+  const meetup = crew.nextMeetup;
+
+  // 가입 규칙(러닝 5회, 성별·나이, 정원, 크루 하나만)은 서버가 확인하고, 안 되면 이유를 알려 준다
+  const apply = async () => {
+    if (!requireLogin() || busy) return;
+    setBusy(true);
+    try {
+      const status = await joinCrew(crew.crewId);
+      router.replace({
+        pathname: '/crews/done',
+        params: { type: status === 'JOINED' ? 'joined' : 'applied', id: crew.id, name: crew.name },
+      });
+    } catch (e) {
+      const message = errorMessage(e);
+      if (message.includes('러닝 기록')) router.push('/crews/eligibility');
+      else if (message.includes('하나만')) router.push({ pathname: '/crews/done', params: { type: 'limit' } });
+      else if (message.includes('성별') || message.includes('나이') || message.includes('만 가입'))
+        router.push({ pathname: '/crews/done', params: { type: 'fail', id: crew.id, name: crew.name, reason: message } });
+      else toast.show(message);
+    } finally {
+      setBusy(false);
     }
-    if (crew.womenOnly) {
-      router.push({ pathname: '/crews/done', params: { type: 'fail', id: crew.id } });
-      return;
+  };
+
+  const leave = async () => {
+    setLeaveOpen(false);
+    try {
+      await leaveCrew(crew.crewId);
+      if (isPending) {
+        toast.show('가입 신청을 취소했어요');
+      } else {
+        router.replace({ pathname: '/crews/done', params: { type: 'left', name: crew.name } });
+      }
+    } catch (e) {
+      toast.show(errorMessage(e));
     }
-    const counted = MY_RUNS.filter((run) => run.km >= 1).length;
-    if (counted < REQUIRED_RUNS) {
-      router.push('/crews/eligibility');
-      return;
-    }
-    if (crew.join === '바로 가입') {
-      actions.joinCrew(crew.id);
-      router.replace({ pathname: '/crews/done', params: { type: 'joined', id: crew.id } });
-      return;
-    }
-    actions.applyCrew(crew.id);
-    router.replace({ pathname: '/crews/done', params: { type: 'applied', id: crew.id } });
   };
 
   if (mine) {
@@ -48,45 +85,69 @@ export default function CrewDetailScreen() {
         header={<TopBar variant="plain" title="내 크루" />}
         bottom={
           <>
-            <Button label="크루 탈퇴" tone="danger" height={56} radius={28} fontSize={16} onPress={() => setLeaveOpen(true)} />
+            {crew.iAmLeader ? (
+              <Button
+                label="크루 관리"
+                tone="outline"
+                height={56}
+                radius={28}
+                fontSize={16}
+                onPress={() => router.push({ pathname: '/crews/manage', params: { id: crew.id } })}
+              />
+            ) : (
+              <Button label="크루 탈퇴" tone="danger" height={56} radius={28} fontSize={16} onPress={() => setLeaveOpen(true)} />
+            )}
             <Button
-              label={joinedMeeting ? '모임 참여 완료' : '모임 참여하기'}
+              label={!meetup ? '예정된 모임 없음' : meetup.myAttendance === 'ATTENDING' ? '모임 참여 예정' : '모임 참여하기'}
               tone="darkLime"
               height={56}
               radius={28}
               fontSize={16}
               flex
-              onPress={() => router.push('/crews/run')}
+              disabled={!meetup}
+              onPress={() => router.push({ pathname: '/crews/run', params: { id: crew.id } })}
             />
           </>
         }
         overlay={
-          <ConfirmDialog
-            visible={leaveOpen}
-            title="크루를 탈퇴할까요?"
-            message="탈퇴하면 크루 모임과 채팅에서 나가게 돼요. 다시 가입하려면 가입 신청을 새로 해야 해요."
-            confirmLabel="탈퇴하기"
-            danger
-            onCancel={() => setLeaveOpen(false)}
-            onConfirm={() => {
-              setLeaveOpen(false);
-              actions.leaveCrew();
-              router.replace({ pathname: '/crews/done', params: { type: 'left', id: crew.id } });
-            }}
-          />
+          <>
+            <ConfirmDialog
+              visible={leaveOpen}
+              title="크루를 탈퇴할까요?"
+              message="탈퇴하면 크루 모임 일정과 공지를 더 볼 수 없어요. 다시 가입하려면 가입 신청을 새로 해야 해요."
+              confirmLabel="탈퇴하기"
+              danger
+              onCancel={() => setLeaveOpen(false)}
+              onConfirm={leave}
+            />
+            {toast.node}
+          </>
         }>
         <CrewHero crew={crew} />
-        <Pressable onPress={() => router.push('/crews/run')} accessibilityRole="button">
+        <Pressable
+          disabled={!meetup}
+          onPress={() => router.push({ pathname: '/crews/run', params: { id: crew.id } })}
+          accessibilityRole="button">
           <CrewCard style={styles.next}>
             <View style={styles.flex}>
               <Text style={styles.nextLabel}>다음 모임</Text>
-              <Text style={styles.nextDay}>{meeting.day}</Text>
-              <Text style={styles.nextLabel}>{meeting.summary}</Text>
+              {meetup ? (
+                <>
+                  <Text style={styles.nextDay}>{meetupDay(meetup.runAt)}</Text>
+                  <Text style={styles.nextLabel}>
+                    {meetup.meetingPlace ?? crew.place} · {meetup.attendingCount}명 참석
+                  </Text>
+                </>
+              ) : (
+                <Text style={styles.nextDay}>{crew.iAmLeader ? '크루 관리에서 모임을 만들어 보세요' : '아직 잡힌 모임이 없어요'}</Text>
+              )}
             </View>
-            <View style={styles.nextRight}>
-              <DarkPill label={meeting.dday} size={12} />
-              {joinedMeeting ? <Text style={styles.joined}>참여 예정</Text> : null}
-            </View>
+            {meetup ? (
+              <View style={styles.nextRight}>
+                <DarkPill label={crew.badge} size={12} />
+                {meetup.myAttendance === 'ATTENDING' ? <Text style={styles.joined}>참여 예정</Text> : null}
+              </View>
+            ) : null}
           </CrewCard>
         </Pressable>
         <CrewAbout crew={crew} />
@@ -101,23 +162,25 @@ export default function CrewDetailScreen() {
       header={<TopBar variant="plain" title="크루 상세" />}
       bottom={
         isPending ? (
+          <Button label="가입 신청 취소" tone="outline" height={56} radius={28} fontSize={16} flex onPress={leave} />
+        ) : (
           <Button
-            label="가입 신청 취소"
-            tone="outline"
+            label={!crew.recruiting ? '지금은 모집하지 않아요' : busy ? '신청하는 중…' : crew.dto.joinType === 'AUTO' ? '바로 가입하기' : '가입 신청하기'}
+            tone="darkLime"
             height={56}
             radius={28}
             fontSize={16}
             flex
-            onPress={() => {
-              actions.cancelApply();
-              router.back();
-            }}
+            disabled={!crew.recruiting || busy}
+            onPress={apply}
           />
-        ) : (
-          <Button label="가입 신청하기" tone="darkLime" height={56} radius={28} fontSize={16} flex onPress={apply} />
         )
-      }>
-      <CrewHero crew={crew} restricted={crew.womenOnly ? '여성 전용' : undefined} />
+      }
+      overlay={toast.node}>
+      <CrewHero
+        crew={crew}
+        restricted={crew.womenOnly ? '여성 전용' : crew.dto.genderLimit === 'MALE' ? '남성 전용' : undefined}
+      />
       {isPending ? (
         <View style={styles.pending}>
           <Text style={styles.pendingText}>가입 신청을 보냈어요. 크루장이 승인하면 알려드릴게요</Text>

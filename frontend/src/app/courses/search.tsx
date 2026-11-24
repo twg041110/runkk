@@ -3,18 +3,31 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { ChevronLeftIcon, CloseIcon, SearchIcon } from '@/components/common/icons';
-import { Chip, EmptyState, IconButton, SubScreen } from '@/components/common/ui';
+import { Chip, EmptyState, IconButton, LoadingBlock, SubScreen, useToast } from '@/components/common/ui';
 import { CourseCard } from '@/components/course/course-card';
 import { Palette } from '@/constants/theme';
-import { COURSES, POPULAR_SEARCH, RECENT_SEARCHES, getCourse } from '@/data/courses';
+import { useCourses } from '@/lib/courses';
+
+// 최근 검색어는 앱을 켜 둔 동안만 기억한다
+let recentMemory: string[] = [];
 
 export default function CourseSearchScreen() {
   const [query, setQuery] = useState('');
-  const [recent, setRecent] = useState(RECENT_SEARCHES);
+  const [recent, setRecentState] = useState(recentMemory);
+  const setRecent = (update: (list: string[]) => string[]) =>
+    setRecentState((list) => (recentMemory = update(list)));
+  const toast = useToast();
+  const coursesQuery = useCourses();
+  const courses = coursesQuery.data ?? [];
   const q = query.trim();
   const results = q
-    ? COURSES.filter((course) => `${course.name} ${course.town} ${course.start} ${course.tag}`.includes(q))
+    ? courses.filter((course) =>
+        `${course.name} ${course.town} ${course.start} ${course.tag} ${course.features.join(' ')}`.includes(q),
+      )
     : [];
+  const popular = [...courses]
+    .sort((a, b) => b.weeklyRunners - a.weeklyRunners || b.reviewCount - a.reviewCount)
+    .slice(0, 5);
 
   const search = (text: string) => {
     setQuery(text);
@@ -23,6 +36,7 @@ export default function CourseSearchScreen() {
 
   return (
     <SubScreen
+      overlay={toast.node}
       header={
         <View style={styles.bar}>
           <IconButton label="뒤로" onPress={() => router.back()} style={styles.back}>
@@ -53,7 +67,7 @@ export default function CourseSearchScreen() {
           <>
             <Text style={styles.count}>코스 {results.length}개</Text>
             {results.map((course) => (
-              <CourseCard key={course.id} course={course} />
+              <CourseCard key={course.id} course={course} onError={toast.show} />
             ))}
           </>
         ) : (
@@ -65,7 +79,7 @@ export default function CourseSearchScreen() {
             <View style={styles.block}>
               <View style={styles.rowBetween}>
                 <Text style={styles.heading}>최근 검색어</Text>
-                <Pressable onPress={() => setRecent([])} hitSlop={8}>
+                <Pressable onPress={() => setRecent(() => [])} hitSlop={8}>
                   <Text style={styles.clear}>전체 삭제</Text>
                 </Pressable>
               </View>
@@ -78,13 +92,12 @@ export default function CourseSearchScreen() {
           ) : null}
           <View style={styles.block}>
             <Text style={styles.heading}>이번 주 인기 코스</Text>
-            <View style={styles.rankCard}>
-              {POPULAR_SEARCH.map((id, index) => {
-                const course = getCourse(id);
-                return (
+            {popular.length > 0 ? (
+              <View style={styles.rankCard}>
+                {popular.map((course, index) => (
                   <Pressable
-                    key={id}
-                    onPress={() => router.push(`/courses/${id}`)}
+                    key={course.id}
+                    onPress={() => router.push(`/courses/${course.id}`)}
                     style={[styles.rankRow, index > 0 && styles.rankBorder]}
                     accessibilityRole="button">
                     <Text style={styles.rankNo}>{index + 1}</Text>
@@ -93,9 +106,13 @@ export default function CourseSearchScreen() {
                     </Text>
                     <Text style={styles.rankTown}>{course.town}</Text>
                   </Pressable>
-                );
-              })}
-            </View>
+                ))}
+              </View>
+            ) : coursesQuery.loading ? (
+              <LoadingBlock height={220} count={1} />
+            ) : (
+              <Text style={styles.count}>{coursesQuery.error ?? '아직 등록된 코스가 없어요'}</Text>
+            )}
           </View>
         </>
       )}

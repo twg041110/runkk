@@ -44,9 +44,12 @@ public class CourseService {
     private final SavedCourseRepository saved;
     private final RunRecordRepository runs;
     private final MemberService memberService;
+    private final com.example.runkk.friend.FriendRepository friends;
 
     public CourseService(CourseRepository courses, CourseFeatureRepository features, CourseReviewRepository reviews,
-            SavedCourseRepository saved, RunRecordRepository runs, MemberService memberService) {
+            SavedCourseRepository saved, RunRecordRepository runs, MemberService memberService,
+            com.example.runkk.friend.FriendRepository friends) {
+        this.friends = friends;
         this.courses = courses;
         this.features = features;
         this.reviews = reviews;
@@ -141,6 +144,23 @@ public class CourseService {
         Page<SavedCourse> result = saved.findMine(me, PageRequest.of(page, size));
         Stats stats = stats(me, result.getContent().stream().map(s -> s.getCourse().getCourseId()).toList());
         return PageResponse.of(result, s -> toSummary(s.getCourse(), stats));
+    }
+
+    /** 이 코스에서 나와 친구들의 가장 빠른 기록 (사람마다 하나, 빠른 순) */
+    public List<com.example.runkk.run.RunDto.RecordItem> records(Long me, Long courseId) {
+        get(courseId);
+        java.util.Set<Long> ids = new java.util.HashSet<>();
+        ids.add(me);
+        friends.findAllOf(me, com.example.runkk.friend.Friend.Status.ACCEPTED)
+                .forEach(f -> ids.add(f.other(me).getMemberId()));
+        Map<Long, com.example.runkk.run.RunRecord> best = new HashMap<>();
+        for (com.example.runkk.run.RunRecord r : runs.findOnCourse(courseId, ids)) {
+            best.merge(r.getMember().getMemberId(), r,
+                    (a, b) -> a.getDurationSec() <= b.getDurationSec() ? a : b);
+        }
+        return best.values().stream()
+                .sorted(java.util.Comparator.comparing(com.example.runkk.run.RunRecord::getDurationSec))
+                .map(r -> com.example.runkk.run.RunDto.RecordItem.of(r, me)).toList();
     }
 
     public Course get(Long courseId) {

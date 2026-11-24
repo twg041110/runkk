@@ -44,18 +44,39 @@ public final class RunDto {
     public record Summary(Long recordId, RunRecord.RunType runType, BigDecimal distanceKm, Integer durationSec,
             Integer avgPaceSec, Integer calories, RunRecord.GoalType goalType, BigDecimal goalValue,
             BigDecimal completionRate, Boolean goalAchieved, LocalDateTime startedAt, LocalDateTime endedAt,
-            Long courseId, String courseName) {
+            Long courseId, String courseName, String courseRegion) {
 
         public static Summary of(RunRecord r) {
             return new Summary(r.getRecordId(), r.getRunType(), r.getDistanceKm(), r.getDurationSec(),
                     r.getAvgPaceSec(), r.getCalories(), r.getGoalType(), r.getGoalValue(), r.getCompletionRate(),
                     r.getGoalAchieved(), r.getStartedAt(), r.getEndedAt(),
                     r.getCourse() == null ? null : r.getCourse().getCourseId(),
-                    r.getCourse() == null ? null : r.getCourse().getName());
+                    r.getCourse() == null ? null : r.getCourse().getName(),
+                    r.getCourse() == null ? null : r.getCourse().getRegion());
         }
     }
 
     public record Detail(Summary record, Long inviteId, Long meetupId, List<Point> routePoints) {
+    }
+
+    /** 코스 기록 비교, 함께 달리기 결과에 쓰는 기록 한 줄 */
+    public record RecordItem(MemberDto.Simple member, boolean me, Long recordId, Integer durationSec,
+            BigDecimal distanceKm, Integer avgPaceSec, LocalDateTime startedAt) {
+
+        public static RecordItem of(RunRecord r, Long me) {
+            return new RecordItem(MemberDto.Simple.of(r.getMember()), r.getMember().getMemberId().equals(me),
+                    r.getRecordId(), r.getDurationSec(), r.getDistanceKm(), r.getAvgPaceSec(), r.getStartedAt());
+        }
+    }
+
+    /** 친구 상세 화면: 친구의 누적·이번 주·이번 달 기록과 최근 러닝 */
+    public record FriendStats(MemberDto.Profile member, boolean friend, BigDecimal totalKm, BigDecimal weeklyKm,
+            BigDecimal monthlyKm, long runCount, Integer avgPaceSec, LocalDateTime firstRunAt,
+            List<Summary> recentRuns, long togetherCount, BigDecimal togetherKm, LocalDateTime lastTogether) {
+    }
+
+    /** 함께 달리기 초대와 두 사람이 남긴 기록 */
+    public record InviteRecords(Invite invite, List<RecordItem> records) {
     }
 
     public record DayKm(LocalDate date, BigDecimal distanceKm) {

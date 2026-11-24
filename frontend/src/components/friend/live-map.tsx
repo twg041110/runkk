@@ -15,8 +15,9 @@ export function LiveMap({
 }: {
   height?: number;
   me: number;
-  friend: number;
-  friendLetter: string;
+  /** 친구가 없으면(혼자 달리기) 내 위치만 그린다 */
+  friend?: number;
+  friendLetter?: string;
 }) {
   // 경로: 왼쪽 아래 → 오른쪽 위 곡선
   const point = (t: number) => {
@@ -27,8 +28,8 @@ export function LiveMap({
   const path = Array.from({ length: 41 }, (_, i) => point(i / 40));
   const d = path.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
   const meP = point(Math.min(me, 1));
-  const frP = point(Math.min(friend, 1));
-  const done = path.filter((_, i) => i / 40 <= Math.max(me, friend));
+  const frP = point(Math.min(friend ?? 0, 1));
+  const done = path.filter((_, i) => i / 40 <= Math.max(me, friend ?? 0));
   const dDone = done.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
 
   return (
@@ -41,12 +42,16 @@ export function LiveMap({
         <Path d="M180 0 L 196 56" stroke="#FFFFFF" strokeWidth={6} fill="none" />
         <Path d={d} stroke="#C9CBD1" strokeWidth={5} fill="none" strokeLinecap="round" />
         <Path d={dDone} stroke={Palette.ink} strokeWidth={7} fill="none" strokeLinecap="round" />
-        <Path d={dDone} stroke="#FF8A3D" strokeWidth={4} fill="none" strokeLinecap="round" />
+        <Path d={dDone} stroke={friend === undefined ? Palette.accent : '#FF8A3D'} strokeWidth={4} fill="none" strokeLinecap="round" />
         <Circle cx={meP.x} cy={meP.y} r={8} fill={Palette.accent} stroke={Palette.ink} strokeWidth={2} />
-        <Circle cx={frP.x} cy={frP.y} r={11} fill="#F6D9B8" stroke={Palette.ink} strokeWidth={2} />
-        <SvgText x={frP.x} y={frP.y + 4} fontSize={11} fontWeight="700" fill={Palette.ink} textAnchor="middle">
-          {friendLetter}
-        </SvgText>
+        {friend !== undefined ? (
+          <>
+            <Circle cx={frP.x} cy={frP.y} r={11} fill="#F6D9B8" stroke={Palette.ink} strokeWidth={2} />
+            <SvgText x={frP.x} y={frP.y + 4} fontSize={11} fontWeight="700" fill={Palette.ink} textAnchor="middle">
+              {friendLetter}
+            </SvgText>
+          </>
+        ) : null}
       </Svg>
     </View>
   );

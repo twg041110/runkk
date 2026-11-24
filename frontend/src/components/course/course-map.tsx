@@ -1,7 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Path, Rect, Text as SvgText } from 'react-native-svg';
 
-import type { MapShape } from '@/data/courses';
+import type { MapShape } from '@/lib/courses';
 
 // 코스 썸네일 지도 (피그마 'map' 그림을 따라 그린 것).
 // 실제 지도 연동 전까지 쓰는 그림이며, shape 에 따라 경로 모양만 바뀐다.

@@ -1,8 +1,10 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import { CardHeading, InfoRows } from '@/components/common/ui';
-import { Palette } from '@/constants/theme';
-import { CREW_MEMBERS, MEMBER_COLORS, type Crew } from '@/data/crews';
+import { AvatarColors, Palette } from '@/constants/theme';
+import type { Crew } from '@/lib/crews';
+import { useCrewMembers } from '@/lib/crews';
+import { initial } from '@/lib/format';
 
 /** 크루 상세 위쪽 검은 카드 (아바타 · 이름 · 멤버/페이스/모임) */
 export function CrewHero({ crew, restricted }: { crew: Crew; restricted?: string }) {
@@ -51,16 +53,17 @@ export function CrewAbout({ crew }: { crew: Crew }) {
   return (
     <CrewCard style={styles.about}>
       <CardHeading>크루 소개</CardHeading>
-      <Text style={styles.aboutText}>{crew.intro}</Text>
+      <Text style={styles.aboutText}>{crew.intro || '아직 크루 소개가 없어요.'}</Text>
     </CrewCard>
   );
 }
 
 export function CrewInfo({ crew, full }: { crew: Crew; full?: boolean }) {
+  const left = Math.max(crew.capacity - crew.members, 0);
   const rows = [
-    { label: '활동 지역', value: crew.place },
+    { label: '활동 지역', value: crew.place || '정해지지 않았어요' },
     { label: '모임 일정', value: crew.schedule },
-    { label: '모집 인원', value: `${crew.capacity - crew.members}명 남음 (${crew.members} / ${crew.capacity}명)` },
+    { label: '모집 인원', value: `${left}명 남음 (${crew.members} / ${crew.capacity}명)` },
   ];
   if (full) {
     rows.push(
@@ -77,21 +80,27 @@ export function CrewInfo({ crew, full }: { crew: Crew; full?: boolean }) {
   );
 }
 
+/** 크루 멤버 (서버에서 가입한 멤버 이름을 받아 앞 글자로 보여 준다) */
 export function CrewMembers({ crew }: { crew: Crew }) {
+  const members = useCrewMembers(crew.id).data ?? [];
   return (
     <CrewCard style={styles.about}>
-      <CardHeading>멤버</CardHeading>
-      <MemberAvatars extra={crew.members - CREW_MEMBERS.length} />
+      <CardHeading>{`멤버 ${crew.members}명`}</CardHeading>
+      <MemberAvatars names={members.map((m) => m.member.nickname)} total={crew.members} />
     </CrewCard>
   );
 }
 
-export function MemberAvatars({ extra }: { extra: number }) {
+/** 이름 앞 글자 동그라미를 5개까지 겹쳐 보여 주고, 나머지는 +숫자 */
+export function MemberAvatars({ names, total }: { names: string[]; total?: number }) {
+  const shown = names.slice(0, 5);
+  const extra = (total ?? names.length) - shown.length;
+  const colors = Object.values(AvatarColors);
   return (
     <View style={styles.avatars}>
-      {CREW_MEMBERS.map((name, index) => (
-        <View key={name} style={[styles.member, { backgroundColor: MEMBER_COLORS[index] }]}>
-          <Text style={styles.memberText}>{name}</Text>
+      {shown.map((name, index) => (
+        <View key={`${name}-${index}`} style={[styles.member, { backgroundColor: AvatarColors[initial(name)] ?? colors[index % colors.length] }]}>
+          <Text style={styles.memberText}>{initial(name)}</Text>
         </View>
       ))}
       {extra > 0 ? (

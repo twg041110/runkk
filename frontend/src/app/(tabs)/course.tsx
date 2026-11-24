@@ -8,7 +8,10 @@ import {
   Button,
   Card,
   Chip,
+  EmptyState,
   IconButton,
+  LoadingBlock,
+  QueryView,
   SectionTitle,
   Sheet,
   TabHeader,
@@ -20,30 +23,47 @@ import { CourseCard } from '@/components/course/course-card';
 import { CourseMap } from '@/components/course/course-map';
 import { LevelColors, Palette } from '@/constants/theme';
 import { josa } from '@/utils/josa';
+import { useAuth } from '@/hooks/use-auth';
 import {
-  COURSES,
-  MY_LEVEL,
   PURPOSES,
-  TOWNS,
-  getCourse,
+  levelFromRuns,
+  townsFromRuns,
+  useCourses,
+  useMyRuns,
   type Course,
   type Purpose,
-} from '@/data/courses';
+} from '@/lib/courses';
 import { emptyFilter, filterCourses, filterToParams, type CourseFilter } from '@/data/course-filter';
 
 const MONTH = new Date().getMonth() + 1;
 
+/** 이달의 추천: 내 레벨에 맞는 코스 중 이번 주 러너가 많고 별점이 높은 코스 */
+function pickCourse(courses: Course[], level: '초급' | '중급' | '숙련자') {
+  const target = level === '숙련자' ? '상급' : level;
+  const ranked = [...courses].sort(
+    (a, b) => b.weeklyRunners - a.weeklyRunners || b.rating - a.rating || b.reviewCount - a.reviewCount,
+  );
+  return ranked.find((c) => c.level === target) ?? ranked[0];
+}
+
 export default function CourseScreen() {
   const insets = useSafeAreaInsets();
   const toast = useToast();
+  const { me } = useAuth();
   const [purpose, setPurpose] = useState<Purpose>('초보 추천');
   const [filterOpen, setFilterOpen] = useState(false);
   const [levelOpen, setLevelOpen] = useState(false);
 
-  const pick = getCourse('yeouido');
-  const purposeCourses = COURSES.filter((course) => course.purposes.includes(purpose)).slice(0, 2);
-  const hotCourses = COURSES.filter((course) => course.hot).slice(0, 2);
-  const town = TOWNS[0];
+  const coursesQuery = useCourses();
+  const runsQuery = useMyRuns(!!me);
+  const courses = coursesQuery.data ?? [];
+  const myLevel = levelFromRuns(runsQuery.data);
+  const pick = courses.length ? pickCourse(courses, myLevel.level) : undefined;
+  const purposeCourses = courses.filter((course) => course.purposes.includes(purpose)).slice(0, 2);
+  const hotCourses = [...courses]
+    .sort((a, b) => b.weeklyRunners - a.weeklyRunners || b.reviewCount - a.reviewCount)
+    .slice(0, 2);
+  const town = townsFromRuns(runsQuery.data)[0];
 
   const onSaved = (course: Course, saved: boolean) => {
     if (saved) {
@@ -74,6 +94,9 @@ export default function CourseScreen() {
         />
 
         {/* 이달의 추천 코스 */}
+        <QueryView query={coursesQuery} loading={<LoadingBlock height={220} count={1} />}>
+          {() =>
+            pick ? (
         <View style={styles.pick}>
           <View style={shared.rowBetween}>
             <Text style={styles.pickLabel}>{MONTH}월의 추천 코스</Text>
@@ -82,7 +105,7 @@ export default function CourseScreen() {
               style={styles.levelChip}
               accessibilityRole="button"
               accessibilityLabel="내 레벨 안내 보기">
-              <Text style={styles.levelChipText}>내 레벨 · {MY_LEVEL.level}</Text>
+              <Text style={styles.levelChipText}>내 레벨 · {myLevel.level}</Text>
             </Pressable>
           </View>
           <Pressable
@@ -108,9 +131,14 @@ export default function CourseScreen() {
             height={48}
             radius={14}
             icon={(color) => <PlaySmallIcon color={color} />}
-            onPress={() => router.navigate('/')}
+            onPress={() => router.push({ pathname: '/run', params: { courseId: pick.id } })}
           />
         </View>
+            ) : (
+              <EmptyState title="아직 등록된 코스가 없어요" message="코스가 준비되면 여기에서 추천해 드릴게요" compact />
+            )
+          }
+        </QueryView>
 
         {/* 목적별 추천 */}
         <View style={styles.section}>
@@ -125,8 +153,11 @@ export default function CourseScreen() {
             ))}
           </View>
           {purposeCourses.map((course) => (
-            <CourseCard key={course.id} course={course} onSaved={onSaved} />
+            <CourseCard key={course.id} course={course} onSaved={onSaved} onError={toast.show} />
           ))}
+          {coursesQuery.data && purposeCourses.length === 0 ? (
+            <EmptyState title={`${purpose} 코스가 아직 없어요`} message="다른 목적을 골라 보세요" compact />
+          ) : null}
         </View>
 
         {/* 핫플 코스 */}
@@ -137,28 +168,42 @@ export default function CourseScreen() {
             onMore={() => router.push({ pathname: '/courses/list', params: { kind: 'hot' } })}
           />
           {hotCourses.map((course) => (
-            <CourseCard key={course.id} course={course} onSaved={onSaved} />
+            <CourseCard key={course.id} course={course} onSaved={onSaved} onError={toast.show} />
           ))}
         </View>
 
         {/* 동네 기록 */}
         <View style={styles.section}>
-          <SectionTitle title="동네 기록" caption="내가 달린 동네" onMore={() => router.push('/courses/towns')} />
-          <Card onPress={() => router.push('/courses/towns')} style={styles.townCard}>
-            <CourseMap shape={town.shape} />
-            <View style={styles.townText}>
-              <Tag label="가장 많이 달린 동네" />
-              <Text style={styles.townName}>{town.name}</Text>
+          <SectionTitle
+            title="동네 기록"
+            caption="이번 달 내가 달린 동네"
+            onMore={town ? () => router.push('/courses/towns') : undefined}
+          />
+          {town ? (
+            <Card onPress={() => router.push('/courses/towns')} style={styles.townCard}>
+              <CourseMap shape={town.shape} />
+              <View style={styles.townText}>
+                <Tag label="가장 많이 달린 동네" />
+                <Text style={styles.townName}>{town.name}</Text>
+                <Text style={styles.townMeta}>
+                  {town.runs}번 · {town.km}km 달렸어요
+                </Text>
+                <Text style={styles.townCourse}>자주 달린 코스 · {town.course}</Text>
+              </View>
+            </Card>
+          ) : (
+            <Card style={styles.townEmpty}>
+              <Text style={styles.townName}>{me ? '아직 동네 기록이 없어요' : '로그인하면 동네 기록이 쌓여요'}</Text>
               <Text style={styles.townMeta}>
-                {town.runs}번 · {town.km}km 달렸어요
+                {me ? '코스를 골라 달리면 그 동네에 기록이 쌓여요' : '코스를 골라 달린 기록을 동네별로 모아 보여 드려요'}
               </Text>
-              <Text style={styles.townCourse}>자주 달린 코스 · {town.course}</Text>
-            </View>
-          </Card>
+            </Card>
+          )}
         </View>
       </ScrollView>
 
       <FilterSheet
+        courses={courses}
         visible={filterOpen}
         onClose={() => setFilterOpen(false)}
         onApply={(filter) => {
@@ -166,7 +211,7 @@ export default function CourseScreen() {
           router.push({ pathname: '/courses/list', params: { kind: 'filter', ...filterToParams(filter) } });
         }}
       />
-      <LevelSheet visible={levelOpen} onClose={() => setLevelOpen(false)} />
+      <LevelSheet visible={levelOpen} onClose={() => setLevelOpen(false)} myLevel={myLevel} signedIn={!!me} />
       {toast.node}
     </View>
   );
@@ -178,16 +223,18 @@ const TERRAIN = ['평지 위주', '완만한 언덕', '업힐 포함'] as const;
 const AMENITY = ['화장실', '급수대', '가로등 많음', '주차장'] as const;
 
 function FilterSheet({
+  courses,
   visible,
   onClose,
   onApply,
 }: {
+  courses: Course[];
   visible: boolean;
   onClose: () => void;
   onApply: (filter: CourseFilter) => void;
 }) {
   const [filter, setFilter] = useState<CourseFilter>(emptyFilter);
-  const count = useMemo(() => filterCourses(filter).length, [filter]);
+  const count = useMemo(() => filterCourses(courses, filter).length, [courses, filter]);
   const toggleOne = <K extends 'time' | 'terrain'>(key: K, value: CourseFilter[K]) =>
     setFilter((f) => ({ ...f, [key]: f[key] === value ? null : value }));
 
@@ -275,8 +322,24 @@ const LEVELS = [
   { level: '숙련자' as const, rule: '1회 평균 10km 이상' },
 ];
 
-function LevelSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  const remain = (5 - MY_LEVEL.averageKm).toFixed(1);
+function LevelSheet({
+  visible,
+  onClose,
+  myLevel,
+  signedIn,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  myLevel: ReturnType<typeof levelFromRuns>;
+  signedIn: boolean;
+}) {
+  const MY_LEVEL = myLevel;
+  const next =
+    MY_LEVEL.level === '초급'
+      ? `평균 ${(5 - MY_LEVEL.averageKm).toFixed(1)}km만 더 길게 달리면 중급이 돼요`
+      : MY_LEVEL.level === '중급'
+        ? `평균 ${(10 - MY_LEVEL.averageKm).toFixed(1)}km만 더 길게 달리면 숙련자가 돼요`
+        : '가장 높은 레벨이에요';
   return (
     <Sheet visible={visible} onClose={onClose}>
       <View>
@@ -286,9 +349,17 @@ function LevelSheet({ visible, onClose }: { visible: boolean; onClose: () => voi
       <View style={styles.levelCard}>
         <View style={styles.levelHead}>
           <Text style={styles.levelBig}>{MY_LEVEL.level}</Text>
-          <Text style={styles.levelAvg}>1회 평균 {MY_LEVEL.averageKm}km</Text>
+          <Text style={styles.levelAvg}>
+            {MY_LEVEL.runCount > 0 ? `1회 평균 ${MY_LEVEL.averageKm}km` : '최근 4주 기록 없음'}
+          </Text>
         </View>
-        <Text style={styles.levelNext}>평균 {remain}km만 더 길게 달리면 중급이 돼요</Text>
+        <Text style={styles.levelNext}>
+          {!signedIn
+            ? '로그인하고 달리면 내 기록으로 레벨을 정해 드려요'
+            : MY_LEVEL.runCount > 0
+              ? next
+              : '달리기를 기록하면 평균 거리로 레벨이 정해져요'}
+        </Text>
       </View>
       <View style={styles.levelList}>
         {LEVELS.map((row) => {
@@ -329,6 +400,7 @@ const styles = StyleSheet.create({
   townName: { fontSize: 16, fontWeight: '700', color: Palette.ink },
   townMeta: { fontSize: 13, color: Palette.muted },
   townCourse: { fontSize: 12, fontWeight: '500', color: Palette.inkSoft },
+  townEmpty: { gap: 6, padding: 16 },
   filterGroup: { gap: 10 },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   sheetButtons: { flexDirection: 'row', gap: 10, marginTop: 4 },

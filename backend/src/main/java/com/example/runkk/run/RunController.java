@@ -78,6 +78,17 @@ public class RunController {
         return service.sentInvites(CurrentUser.id(jwt));
     }
 
+    @GetMapping("/api/run-invites/{inviteId}")
+    public RunDto.InviteRecords inviteDetail(@AuthenticationPrincipal Jwt jwt, @PathVariable Long inviteId) {
+        return service.inviteDetail(CurrentUser.id(jwt), inviteId);
+    }
+
+    /** 친구(또는 나)의 러닝 통계 */
+    @GetMapping("/api/friends/{memberId}/stats")
+    public RunDto.FriendStats friendStats(@AuthenticationPrincipal Jwt jwt, @PathVariable Long memberId) {
+        return service.stats(CurrentUser.id(jwt), memberId);
+    }
+
     @PatchMapping("/api/run-invites/{inviteId}/accept")
     public RunDto.Invite accept(@AuthenticationPrincipal Jwt jwt, @PathVariable Long inviteId) {
         return service.respond(CurrentUser.id(jwt), inviteId, true);
