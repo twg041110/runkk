@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.function.Consumer;
 
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,10 +16,13 @@ public class MemberService {
 
     private final MemberRepository members;
     private final MemberSettingsRepository settingsRepo;
+    private final PasswordEncoder passwordEncoder;
 
-    public MemberService(MemberRepository members, MemberSettingsRepository settingsRepo) {
+    public MemberService(MemberRepository members, MemberSettingsRepository settingsRepo,
+            PasswordEncoder passwordEncoder) {
         this.members = members;
         this.settingsRepo = settingsRepo;
+        this.passwordEncoder = passwordEncoder;
     }
 
     /** 로그인한 회원. 탈퇴했거나 없는 회원이면 다시 로그인하게 한다 */
@@ -92,6 +96,16 @@ public class MemberService {
         m.setNickname("탈퇴한 회원");
         m.setProfileImageUrl(null);
         m.setBio(null);
+    }
+
+    /** 비밀번호 변경. 현재 비밀번호가 맞을 때만 새 비밀번호를 암호화해서 저장한다 */
+    @Transactional
+    public void changePassword(Long memberId, String currentPassword, String newPassword) {
+        Member m = getActive(memberId);
+        if (!passwordEncoder.matches(currentPassword, m.getPassword())) {
+            throw ApiException.badRequest("현재 비밀번호가 맞지 않아요.");
+        }
+        m.setPassword(passwordEncoder.encode(newPassword));
     }
 
     @Transactional

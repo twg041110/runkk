@@ -54,6 +54,7 @@ cd backend
 | GET | `/me` | 내 정보입니다. 친구 코드(`friendCode`)도 들어 있습니다. |
 | PATCH | `/me` | 프로필을 수정합니다. 보낸 칸만 바뀝니다. |
 | DELETE | `/me` | 회원 탈퇴입니다. 본문은 `{ reason }`이고 생략할 수 있습니다. |
+| PATCH | `/me/password` | 비밀번호 변경입니다. 본문은 `{ currentPassword, newPassword }`입니다. 현재 비밀번호가 틀리면 400 "현재 비밀번호가 맞지 않아요."가 오고, 새 비밀번호는 회원가입과 같은 규칙(영문+숫자 8자 이상)입니다. 성공하면 204(내용 없음)입니다. |
 | GET / PATCH | `/me/settings` | 알림, 방해 금지 시간, 거리 단위, 음성 안내 설정입니다. 방해 금지를 끄려면 `quietTimeOff: true`를 보냅니다. |
 | GET | `/search?nickname=` | 닉네임으로 회원을 찾습니다. |
 | GET | `/{memberId}` 🔓 | 다른 회원의 프로필입니다. |

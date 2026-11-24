@@ -46,6 +46,14 @@ public class MemberController {
         return ResponseEntity.noContent().build();
     }
 
+    /** 비밀번호 변경. 현재 비밀번호가 맞아야 바뀐다 */
+    @PatchMapping("/me/password")
+    public ResponseEntity<Void> changePassword(@AuthenticationPrincipal Jwt jwt,
+            @Valid @RequestBody MemberDto.PasswordChangeRequest req) {
+        service.changePassword(CurrentUser.id(jwt), req.currentPassword(), req.newPassword());
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping("/me/settings")
     public MemberDto.Settings settings(@AuthenticationPrincipal Jwt jwt) {
         return service.settings(CurrentUser.id(jwt));
