@@ -1,83 +1,89 @@
 /**
- * 러닝 경로 그림 (러닝 중 · 결과 화면 위쪽 카드)
+ * 러닝 지도 (러닝 중 · 결과 화면 위쪽 카드) — 폰 전용
  *
- * 받은 GPS 좌표들을 카드 크기에 맞게 줄여서 선으로 그려요.
+ * react-native-maps로 진짜 지도를 띄워요. 안드로이드는 구글 지도, 아이폰은 애플 지도예요.
  * - 노란 선(검은 테두리): 지나온 길
- * - 흰 점: 출발한 곳, 파란 점: 지금 있는 곳 (live일 때만)
+ * - 흰 점: 출발한 곳, 검은 점: 끝난 곳 (결과 화면)
+ * - 파란 점: 지금 내 위치 (러닝 중, 지도 기본 기능 showsUserLocation)
  *
- * TODO: 지금은 진짜 지도 대신 연한 바탕 위에 경로만 그려요.
- *       다음 단계에서 react-native-maps(구글 지도)를 깔고 그 위에 이 경로를 그릴 예정이에요.
+ * 러닝 중(live)에는 내 위치가 바뀔 때마다 지도가 따라 움직여요.
+ * 결과 화면에서는 달린 경로 전체가 카드 안에 들어오게 맞춰요.
+ *
+ * 웹은 react-native-maps를 지원하지 않아서 run-map.web.tsx(격자 그림)가 대신 쓰여요.
+ * TODO: 앱을 APK · 앱스토어용으로 빌드할 때는 구글 지도 API 키가 필요해요. (Expo Go에서는 필요 없음)
  */
+import { useRef } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import Svg, { Circle, Line, Polyline } from 'react-native-svg';
+import MapView, { Marker, Polyline } from 'react-native-maps';
 
 import { Palette } from '@/constants/theme';
 import type { RunPoint } from '@/hooks/use-run-session';
 
-const W = 320; // 그림 좌표계 크기 (실제 화면 크기에 맞춰 늘어나요)
-const H = 220;
-const PAD = 28; // 경로가 카드 가장자리에 붙지 않게 두는 여백
-
-/** 위도·경도 → 그림 좌표. 가장 넓게 퍼진 방향을 기준으로 한 번에 줄여서 모양이 찌그러지지 않게 해요 */
-function project(points: RunPoint[]) {
-  const lats = points.map((p) => p.lat);
-  const lngs = points.map((p) => p.lng);
-  const minLat = Math.min(...lats);
-  const maxLat = Math.max(...lats);
-  const minLng = Math.min(...lngs);
-  const maxLng = Math.max(...lngs);
-  // 경도 1도의 길이는 위도에 따라 짧아져서 cos(위도)를 곱해 가로세로 비율을 맞춰요
-  const lngScale = Math.cos((((minLat + maxLat) / 2) * Math.PI) / 180);
-  const spanX = Math.max((maxLng - minLng) * lngScale, 1e-6);
-  const spanY = Math.max(maxLat - minLat, 1e-6);
-  const scale = Math.min((W - PAD * 2) / spanX, (H - PAD * 2) / spanY);
-  const offsetX = (W - spanX * scale) / 2;
-  const offsetY = (H - spanY * scale) / 2;
-  return points.map((p) => ({
-    x: offsetX + (p.lng - minLng) * lngScale * scale,
-    y: offsetY + (maxLat - p.lat) * scale, // 북쪽이 위로 가도록 뒤집어요
-  }));
-}
+const SEOUL = { latitude: 37.5665, longitude: 126.978 }; // 위치를 아직 모를 때 처음 보여줄 곳
+const ZOOM_DELTA = 0.004; // 처음 보여줄 범위 (위도 0.004도 ≈ 450m)
+const FIT_PADDING = { top: 40, right: 40, bottom: 40, left: 40 }; // 경로가 카드 가장자리에 붙지 않게
 
 export function RunMap({ points, live }: { points: RunPoint[]; live: boolean }) {
-  const xy = points.length > 0 ? project(points) : [];
-  const line = xy.map((p) => `${p.x},${p.y}`).join(' ');
-  const first = xy[0];
-  const last = xy[xy.length - 1];
+  const mapRef = useRef<MapView>(null);
+  const coords = points.map((p) => ({ latitude: p.lat, longitude: p.lng }));
+  const first = coords[0];
+  const last = coords[coords.length - 1];
+
+  // 결과 화면: 지도가 준비되면 경로 전체가 보이게 확대/축소해요
+  const fitRoute = () => {
+    if (live || coords.length < 2) return;
+    mapRef.current?.fitToCoordinates(coords, { edgePadding: FIT_PADDING, animated: false });
+  };
 
   return (
     <View style={styles.card}>
-      <Svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet">
-        {/* 바탕의 옅은 격자 (지도 대신) */}
-        {[1, 2, 3].map((i) => (
-          <Line key={`h${i}`} x1={0} y1={(H / 4) * i} x2={W} y2={(H / 4) * i} stroke="#E4E7EC" strokeWidth={1} />
-        ))}
-        {[1, 2, 3, 4, 5].map((i) => (
-          <Line key={`v${i}`} x1={(W / 6) * i} y1={0} x2={(W / 6) * i} y2={H} stroke="#E4E7EC" strokeWidth={1} />
-        ))}
-
-        {xy.length > 1 && (
+      <MapView
+        ref={mapRef}
+        style={StyleSheet.absoluteFill}
+        initialRegion={{ ...(first ?? SEOUL), latitudeDelta: ZOOM_DELTA, longitudeDelta: ZOOM_DELTA }}
+        onMapReady={fitRoute}
+        showsUserLocation={live}
+        showsMyLocationButton={false}
+        // 러닝 중: 내 위치가 바뀔 때마다 지도 가운데를 내 위치로 옮겨요
+        onUserLocationChange={
+          live
+            ? (e) => {
+                const c = e.nativeEvent.coordinate;
+                if (c) mapRef.current?.animateCamera({ center: { latitude: c.latitude, longitude: c.longitude } }, { duration: 500 });
+              }
+            : undefined
+        }
+        toolbarEnabled={false} // 안드로이드에서 마커를 누르면 뜨는 "길찾기" 버튼 숨김
+        pitchEnabled={false}
+        rotateEnabled={false}
+        showsCompass={false}>
+        {coords.length > 1 && (
           <>
-            <Polyline points={line} fill="none" stroke={Palette.ink} strokeWidth={9} strokeLinecap="round" strokeLinejoin="round" />
-            <Polyline points={line} fill="none" stroke={Palette.accent} strokeWidth={5.5} strokeLinecap="round" strokeLinejoin="round" />
+            {/* 검은 굵은 선 위에 노란 얇은 선을 겹쳐서 테두리처럼 보이게 해요 */}
+            <Polyline coordinates={coords} strokeColor={Palette.ink} strokeWidth={8} lineCap="round" lineJoin="round" />
+            <Polyline coordinates={coords} strokeColor={Palette.accent} strokeWidth={5} lineCap="round" lineJoin="round" />
           </>
         )}
-        {first && xy.length > 1 && (
-          <Circle cx={first.x} cy={first.y} r={4.5} fill={Palette.surface} stroke={Palette.ink} strokeWidth={2.5} />
+        {first && coords.length > 1 && (
+          <Marker coordinate={first} anchor={{ x: 0.5, y: 0.5 }}>
+            <View style={styles.startDot} />
+          </Marker>
         )}
-        {last && live && (
-          <>
-            <Circle cx={last.x} cy={last.y} r={22} fill="#5DD2FF" fillOpacity={0.2} />
-            <Circle cx={last.x} cy={last.y} r={10} fill={Palette.surface} />
-            <Circle cx={last.x} cy={last.y} r={7} fill="#008FFF" />
-          </>
+        {last && !live && coords.length > 1 && (
+          <Marker coordinate={last} anchor={{ x: 0.5, y: 0.5 }}>
+            <View style={styles.endDot} />
+          </Marker>
         )}
-        {last && !live && xy.length > 1 && <Circle cx={last.x} cy={last.y} r={4.5} fill={Palette.ink} />}
-      </Svg>
+      </MapView>
 
-      {points.length === 0 && (
+      {live && points.length === 0 && (
+        <View style={styles.findingPill} pointerEvents="none">
+          <Text style={styles.findingText}>위치를 찾는 중이에요…</Text>
+        </View>
+      )}
+      {!live && points.length === 0 && (
         <View style={styles.empty} pointerEvents="none">
-          <Text style={styles.emptyText}>{live ? '위치를 찾는 중이에요…' : '기록된 경로가 없어요'}</Text>
+          <Text style={styles.emptyText}>기록된 경로가 없어요</Text>
         </View>
       )}
     </View>
@@ -91,13 +97,42 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: '#EEF0F3',
   },
+  startDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 3,
+    borderColor: Palette.ink,
+    backgroundColor: Palette.surface,
+  },
+  endDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: Palette.ink,
+  },
+  findingPill: {
+    position: 'absolute',
+    top: 12,
+    alignSelf: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: 'rgba(28, 30, 34, 0.85)',
+  },
+  findingText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Palette.surface,
+  },
   empty: {
     ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'rgba(240, 242, 245, 0.7)',
   },
   emptyText: {
     fontSize: 13,
-    color: Palette.hint,
+    color: Palette.muted,
   },
 });
