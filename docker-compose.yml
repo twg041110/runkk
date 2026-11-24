@@ -27,6 +27,7 @@ services:
       SPRING_DATASOURCE_URL: jdbc:mariadb://db:3306/runkk?allowPublicKeyRetrieval=true
       SPRING_DATASOURCE_USERNAME: ${DB_USER}
       SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
       TZ: Asia/Seoul
     ports:
       - "127.0.0.1:8080:8080"
