@@ -39,6 +39,12 @@ export default function RunActiveScreen() {
   const [locked, setLocked] = useState(false);
   const [notice, setNotice] = useState('');
 
+  // 화면에 보여 줄 상태. 종료를 누르면 상태가 'finished'가 되는데, 결과 화면으로 넘어가는 동안
+  // 이 화면이 '러닝 중' 모양으로 잠깐 바뀌어 보이지 않게 마지막 상태(예: 일시정지)를 그대로 보여 줘요.
+  // (렌더링 중에 상태를 맞추는 React 권장 방식: 값이 다를 때만 바꿔서 무한 반복되지 않아요)
+  const [shown, setShown] = useState(status);
+  if (status !== 'finished' && status !== shown) setShown(status);
+
   // 안드로이드 뒤로 가기 막기 (true를 돌려주면 "내가 처리했어요"라는 뜻이라 화면이 안 닫혀요)
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => true);
@@ -50,14 +56,14 @@ export default function RunActiveScreen() {
     router.replace('/run/result');
   };
 
-  const label = status === 'paused' || status === 'autoPaused' ? STATUS_LABEL[status] : STATUS_LABEL.running;
-  const paused = status === 'paused';
+  const label = shown === 'paused' || shown === 'autoPaused' ? STATUS_LABEL[shown] : STATUS_LABEL.running;
+  const paused = shown === 'paused';
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 24 }]}>
       <View style={styles.header}>
         <View style={styles.statusRow}>
-          <View style={[styles.statusDot, status !== 'running' && styles.statusDotPaused]} />
+          <View style={[styles.statusDot, shown !== 'running' && styles.statusDotPaused]} />
           <Text style={styles.statusText}>{label}</Text>
         </View>
         <Text style={styles.mode}>바로 러닝</Text>
@@ -67,7 +73,7 @@ export default function RunActiveScreen() {
         <View>
           <RunMap points={points} live />
           {/* 지도 위에 겹쳐 뜨는 안내. 자동 일시정지가 GPS 약함보다 먼저 보여요 */}
-          {status === 'autoPaused' ? (
+          {shown === 'autoPaused' ? (
             <Banner title="멈춰서 기록도 잠시 멈췄어요" description="다시 달리면 자동으로 이어서 기록해요" />
           ) : gpsWeak ? (
             <Banner title="GPS 신호가 약해요" description="하늘이 트인 곳으로 가면 거리가 정확해져요" />
