@@ -111,8 +111,9 @@ export default function RunGoalScreen() {
           unit="km">
           <WheelPicker
             columns={[
-              { items: KM_ITEMS, selected: String(km), onSelect: (v) => setDistanceM(Number(v) * 1000 + m), unit: 'km' },
-              { items: M_ITEMS, selected: String(m).padStart(3, '0'), onSelect: (v) => setDistanceM(km * 1000 + Number(v)), unit: 'm' },
+              // 다른 칸 값은 "지금 값"(d)에서 꺼내요. 화면을 그릴 때의 값(km, m)을 쓰면 그사이 칩으로 바뀐 값을 덮어써요
+              { items: KM_ITEMS, selected: String(km), onSelect: (v) => setDistanceM((d) => Number(v) * 1000 + Math.round((d % 1000) / 100) * 100), unit: 'km' },
+              { items: M_ITEMS, selected: String(m).padStart(3, '0'), onSelect: (v) => setDistanceM((d) => Math.floor(d / 1000) * 1000 + Number(v)), unit: 'm' },
             ]}
           />
           <Text style={styles.chipTitle}>자주 쓰는 거리</Text>
@@ -145,8 +146,8 @@ export default function RunGoalScreen() {
           unit={sec > 0 ? `분 ${sec}초` : '분'}>
           <WheelPicker
             columns={[
-              { items: MIN_ITEMS, selected: String(min), onSelect: (v) => setTimeSec(Number(v) * 60 + sec), unit: '분' },
-              { items: SEC_ITEMS, selected: String(sec).padStart(2, '0'), onSelect: (v) => setTimeSec(min * 60 + Number(v)), unit: '초' },
+              { items: MIN_ITEMS, selected: String(min), onSelect: (v) => setTimeSec((t) => Number(v) * 60 + (t % 60)), unit: '분' },
+              { items: SEC_ITEMS, selected: String(sec).padStart(2, '0'), onSelect: (v) => setTimeSec((t) => Math.floor(t / 60) * 60 + Number(v)), unit: '초' },
             ]}
           />
           <Text style={styles.chipTitle}>자주 쓰는 시간</Text>
