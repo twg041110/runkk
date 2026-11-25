@@ -2,6 +2,7 @@
  * 러닝 화면 묶음 (주소: /run/...)
  *
  *   run/index.tsx     → /run            러닝 시작 ("어떻게 달릴까요?")
+ *   run/goal.tsx      → /run/goal       목표 정하기 (거리 · 시간)
  *   run/countdown.tsx → /run/countdown  3 · 2 · 1
  *   run/active.tsx    → /run/active     러닝 중 (일시정지 · 잠금 · 종료)
  *   run/result.tsx    → /run/result     러닝 결과
@@ -18,6 +19,7 @@ export default function RunLayout() {
     <RunSessionProvider>
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="index" />
+        <Stack.Screen name="goal" />
         <Stack.Screen name="countdown" options={{ gestureEnabled: false, animation: 'fade' }} />
         <Stack.Screen name="active" options={{ gestureEnabled: false, animation: 'fade' }} />
         <Stack.Screen name="result" options={{ gestureEnabled: false, animation: 'fade' }} />

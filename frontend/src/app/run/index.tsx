@@ -2,50 +2,32 @@
  * 러닝 시작 (Figma: 러닝 시작, 러닝 시작 - 위치 권한 필요)
  *
  * - 위쪽 카드: 이번 주 러닝 (지금은 예시 값, TODO(API): GET /api/runs/weekly)
- * - 바로 러닝: 위치 권한 + 폰 위치(GPS) 켜짐을 확인하고 → 카운트다운으로 가요.
- *   권한을 거절하면 "위치 권한이 필요해요" 팝업이 뜨고, "설정 열기"로 폰 설정 화면을 열어요.
- *   폰 위치가 꺼져 있으면 "위치가 꺼져 있어요" 팝업이 떠요.
- * - 목표 정하고 달리기 · 코스 정하기: 아직 안 만들어서 안내만 띄워요.
+ * - 바로 러닝: 위치 권한 + 폰 위치(GPS) 켜짐을 확인하고(use-location-check) → 카운트다운으로 가요.
+ * - 목표 정하고 달리기: 목표 정하기 화면(/run/goal)으로 가요.
+ * - 코스 정하기: 아직 안 만들어서 안내만 띄워요.
  */
-import * as Linking from 'expo-linking';
-import * as Location from 'expo-location';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ConfirmDialog } from '@/components/common/confirm-dialog';
 import { ChevronLeftIcon, ChevronRightIcon, PlayIcon } from '@/components/common/icons';
 import { Toast } from '@/components/common/toast';
 import { Palette } from '@/constants/theme';
-import { FAKE_WEEK } from '@/hooks/use-run-session';
+import { useLocationCheck } from '@/hooks/use-location-check';
+import { FAKE_WEEK, useRunSession } from '@/hooks/use-run-session';
 
 const DAYS = ['월', '화', '수', '목', '금', '토', '일'];
 
 export default function RunStartScreen() {
   const insets = useSafeAreaInsets();
-  const [askPermission, setAskPermission] = useState(false); // 위치 권한 팝업
-  const [locationOff, setLocationOff] = useState(false); // 폰 위치(GPS) 꺼짐 팝업
   const [notice, setNotice] = useState('');
-
-  const startQuickRun = async () => {
-    // 1. 폰에 "위치 권한을 허용할까요?"를 물어봐요. 이미 허용했으면 바로 granted: true가 와요.
-    const { granted } = await Location.requestForegroundPermissionsAsync();
-    if (!granted) {
-      setAskPermission(true);
-      return;
-    }
-    // 2. 권한이 있어도 폰의 위치(GPS) 스위치가 꺼져 있으면 기록할 수 없어요.
-    //    안드로이드는 "위치를 켜시겠어요?" 창을 띄워 주고, 사용자가 거절하면 오류가 나요.
-    try {
-      if (Platform.OS === 'android') await Location.enableNetworkProviderAsync();
-      if (!(await Location.hasServicesEnabledAsync())) throw new Error('위치 꺼짐');
-    } catch {
-      setLocationOff(true);
-      return;
-    }
+  const { setGoal } = useRunSession();
+  // 바로 러닝: 목표 없이(null) 시작해요
+  const { check: startQuickRun, dialogs } = useLocationCheck(() => {
+    setGoal(null);
     router.push('/run/countdown');
-  };
+  });
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
@@ -66,7 +48,7 @@ export default function RunStartScreen() {
           <OptionCard
             title="목표 정하고 달리기"
             description="거리나 시간 목표를 정해서 달려요"
-            onPress={() => setNotice('목표 러닝은 곧 만들 예정이에요')}
+            onPress={() => router.push('/run/goal')}
           />
           <OptionCard
             title="코스 정하기"
@@ -76,28 +58,7 @@ export default function RunStartScreen() {
         </View>
       </ScrollView>
 
-      <ConfirmDialog
-        visible={askPermission}
-        title="위치 권한이 필요해요"
-        message={'달린 거리와 경로를 기록하려면\n위치 권한을 "앱 사용 중 허용"으로 켜 주세요.'}
-        confirmLabel="설정 열기"
-        onCancel={() => setAskPermission(false)}
-        onConfirm={() => {
-          setAskPermission(false);
-          Linking.openSettings(); // 폰 설정 → 이 앱 화면이 열려요
-        }}
-      />
-      <ConfirmDialog
-        visible={locationOff}
-        title="위치가 꺼져 있어요"
-        message={'폰의 위치(GPS)를 켜야 달린 거리를 기록할 수 있어요.\n빠른 설정에서 위치를 켠 뒤 다시 시도해 주세요.'}
-        confirmLabel="다시 시도"
-        onCancel={() => setLocationOff(false)}
-        onConfirm={() => {
-          setLocationOff(false);
-          startQuickRun();
-        }}
-      />
+      {dialogs}
       <Toast message={notice} onHide={() => setNotice('')} />
     </View>
   );

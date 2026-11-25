@@ -11,6 +11,10 @@
  * - GPS 약함: 위치 정확도가 나쁘거나 10초 넘게 위치가 안 오면 어두운 안내가 떠요.
  * - 자동 일시정지: 설정에서 켜 두면, 10초 동안 안 움직일 때 기록을 멈추고 안내가 떠요.
  *
+ * 목표 러닝 (Figma: 목표 정하고 달리기 - 러닝 중)
+ * - 오른쪽 위에 "목표 5.0km · 30분", 큰 숫자 아래에 진행 막대(GoalProgress)가 보여요.
+ * - 시간 목표만 있으면 큰 숫자가 시간이에요. 목표를 채우면 알림만 띄우고 러닝은 계속돼요.
+ *
  * 안드로이드 뒤로 가기 버튼은 막아 뒀어요 (실수로 러닝이 끊기지 않게).
  */
 import { router } from 'expo-router';
@@ -21,10 +25,13 @@ import Svg, { Circle } from 'react-native-svg';
 
 import { LockIcon, PauseIcon, PlayIcon, StopIcon } from '@/components/common/icons';
 import { Toast } from '@/components/common/toast';
+import { GoalProgress } from '@/components/run/goal-progress';
 import { RunMap } from '@/components/run/run-map';
 import { RunStats } from '@/components/run/run-stats';
 import { Palette } from '@/constants/theme';
 import { useRunSession } from '@/hooks/use-run-session';
+import { formatGoalLabel } from '@/utils/run-format';
+import { isGoalReached } from '@/utils/run-goal';
 
 const HOLD_TO_STOP_MS = 1500; // 종료 버튼을 이만큼 눌러야 끝나요
 const STATUS_LABEL = {
@@ -35,7 +42,7 @@ const STATUS_LABEL = {
 
 export default function RunActiveScreen() {
   const insets = useSafeAreaInsets();
-  const { status, elapsedSec, distanceM, points, gpsWeak, pause, resume, finish } = useRunSession();
+  const { status, elapsedSec, distanceM, points, gpsWeak, goal, goalReachedSec, pause, resume, finish } = useRunSession();
   const [locked, setLocked] = useState(false);
   const [notice, setNotice] = useState('');
 
@@ -50,6 +57,12 @@ export default function RunActiveScreen() {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => true);
     return () => sub.remove();
   }, []);
+
+  // 목표 러닝: 목표를 처음 채운 순간 한 번 알려 줘요 (러닝은 멈추지 않고 계속돼요)
+  const reached = goal !== null && isGoalReached(goal, { distanceM, elapsedSec, goalReachedSec });
+  useEffect(() => {
+    if (reached) setNotice('목표 달성! 계속 달려도 되고, 종료해도 돼요');
+  }, [reached]);
 
   const end = () => {
     finish();
@@ -66,7 +79,7 @@ export default function RunActiveScreen() {
           <View style={[styles.statusDot, shown !== 'running' && styles.statusDotPaused]} />
           <Text style={styles.statusText}>{label}</Text>
         </View>
-        <Text style={styles.mode}>바로 러닝</Text>
+        <Text style={styles.mode}>{goal ? formatGoalLabel(goal) : '바로 러닝'}</Text>
       </View>
 
       <View style={styles.body}>
@@ -79,7 +92,13 @@ export default function RunActiveScreen() {
             <Banner title="GPS 신호가 약해요" description="하늘이 트인 곳으로 가면 거리가 정확해져요" />
           ) : null}
         </View>
-        <RunStats distanceM={distanceM} elapsedSec={elapsedSec} />
+        {/* 시간 목표만 있으면 큰 숫자를 시간으로 보여 줘요 */}
+        <RunStats
+          distanceM={distanceM}
+          elapsedSec={elapsedSec}
+          primary={goal && !goal.distanceM && goal.timeSec ? 'time' : 'distance'}>
+          {goal && <GoalProgress goal={goal} distanceM={distanceM} elapsedSec={elapsedSec} goalReachedSec={goalReachedSec} />}
+        </RunStats>
       </View>
 
       {paused ? (

@@ -202,7 +202,8 @@ JDK 25가 필요합니다. 테스트는 `./gradlew test`(H2 메모리 DB)로 돌
   - `(tabs)`: 홈, 커뮤니티, 코스, 친구, 내 정보 (탭 바는 `components/common/app-tabs.tsx`)
   - `settings/*`: 설정 화면들 (main에 합쳐짐)
   - `run/*`: 바로 러닝 흐름 (시작 → 위치 권한 → 카운트다운 → 러닝 중 → 결과, main에 합쳐짐). 러닝 상태는 `hooks/use-run-session.tsx`, 지도는 `components/run/run-map.tsx`(폰) · `run-map.web.tsx`(웹은 격자 그림)
-    - 아직 안 된 것: 기록 서버 저장(`TODO(API)` POST /api/runs), 이번 주 기록은 예시 값(`FAKE_WEEK`), 목표 정하고 달리기 · 코스 정하기, 화면 켜짐 유지 · 음성 안내
+    - 목표 정하고 달리기: `run/goal.tsx`(거리 · 시간 휠), 진행 막대 `components/run/goal-progress.tsx`, 달성 계산 `utils/run-goal.ts`
+    - 아직 안 된 것: 기록 서버 저장(`TODO(API)` POST /api/runs), 이번 주 기록은 예시 값(`FAKE_WEEK`), 코스 정하기, 화면 켜짐 유지 · 음성 안내
 - 임시 입구: 내 정보 탭의 "설정 열기 (임시)", "러닝 시작 (임시)" 버튼. 정식 입구(홈 가운데 러닝 버튼 등)가 생기면 지울 예정입니다.
 
 ### 6-4. 실행

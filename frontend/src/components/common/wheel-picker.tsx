@@ -42,6 +42,7 @@ type Column = {
   items: string[];
   selected: string;
   onSelect: (value: string) => void;
+  unit?: string; // 칸 오른쪽에 붙는 단위 글자 (예: "km", "분"). 없으면 안 붙어요
 };
 
 export function WheelPicker({ columns }: { columns: Column[] }) {
@@ -49,9 +50,16 @@ export function WheelPicker({ columns }: { columns: Column[] }) {
     <View style={styles.wrap}>
       {/* 가운데 고정 회색 띠. 숫자들 뒤에 깔려 있고 움직이지 않아요 */}
       <View style={styles.band} pointerEvents="none" />
-      {columns.map((column, index) => (
-        <WheelColumn key={index} {...column} />
-      ))}
+      {columns.map((column, index) =>
+        column.unit ? (
+          <View key={index} style={styles.unitColumn}>
+            <WheelColumn {...column} />
+            <Text style={styles.unit}>{column.unit}</Text>
+          </View>
+        ) : (
+          <WheelColumn key={index} {...column} />
+        ),
+      )}
     </View>
   );
 }
@@ -104,6 +112,7 @@ function WheelColumn({ items, selected, onSelect }: Column) {
       snapToInterval={ITEM_HEIGHT}
       decelerationRate="fast"
       scrollEventThrottle={16} // 굴리는 동안 1초에 약 60번 위치를 알려줘요
+      nestedScrollEnabled // 스크롤되는 화면 안에 들어가도 안드로이드에서 휠이 굴러가요
       onScroll={handleScroll}
       onLayout={() => scrollToIndex(selectedIndex, false)} // 처음 열릴 때 선택값을 가운데로
     >
@@ -149,6 +158,17 @@ const styles = StyleSheet.create({
   },
   column: {
     flex: 1,
+  },
+  // 휠 높이는 그대로 두고(늘어나면 숫자가 넘쳐요) 단위 글자만 가운데 줄에 맞춰요
+  unitColumn: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  unit: {
+    alignSelf: 'center',
+    marginRight: 12,
+    fontSize: 15,
+    color: Palette.muted,
   },
   // 위아래에 2칸씩 빈 공간 → 첫 칸과 마지막 칸도 가운데 띠까지 올 수 있어요
   content: {
