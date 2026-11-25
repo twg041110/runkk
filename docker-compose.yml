@@ -29,8 +29,9 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
       TZ: Asia/Seoul
+    # 앱이 공인 IP로 접속해요 (http://서버IP:8080). DB(3307)는 위처럼 서버 안에서만 열어요
     ports:
-      - "127.0.0.1:8080:8080"
+      - "8080:8080"
 
 volumes:
   db-data:

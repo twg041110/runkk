@@ -10,10 +10,11 @@ on:
 
 jobs:
   deploy:
-    runs-on: self-hosted
+    # AWS 서버(라벨 aws)의 러너에서 실행해요
+    runs-on: [self-hosted, aws]
     steps:
       - uses: actions/checkout@v5
       - name: 새 코드로 다시 만들고 켜기
-        run: docker compose -p runkk --env-file C:\runkk\.env up -d --build
+        run: docker compose -p runkk --env-file /home/ubuntu/runkk/.env up -d --build
       - name: 안 쓰는 옛날 상자 정리
         run: docker image prune -f
