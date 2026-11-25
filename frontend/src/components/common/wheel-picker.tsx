@@ -88,6 +88,12 @@ function WheelColumn({ items, selected, onSelect }: Column) {
   // 처음 만들어질 때도 "지금 값의 칸"을 목표로 둬요. 안드로이드는 휠이 생기자마자 맨 위(0)에서 스크롤 신호를
   // 한 번 보내는데, 이걸 "사용자가 0까지 굴렸다"로 착각하면 값이 0으로 바뀌어요. 자기 자리에 도착하면 풀려요.
   const pendingTarget = useRef<number | null>(Math.max(0, items.indexOf(selected)));
+  // 처음 만들어질 때의 시작 위치(지금 값의 칸). 맨 위(0)에서 시작했다가 옮겨 가지 않고, 처음부터 그 자리에서 시작해요.
+  // (처음 한 번만 정해요. 값이 바뀔 때마다 바뀌면 칩을 눌렀을 때 부드럽게 굴러가지 않고 뚝 옮겨져요)
+  const [initialOffset] = useState(() => ({
+    x: 0,
+    y: (Math.max(0, items.indexOf(selected)) + OVERSCROLL_ROWS) * ITEM_HEIGHT,
+  }));
   const lastY = useRef((Math.max(0, items.indexOf(selected)) + OVERSCROLL_ROWS) * ITEM_HEIGHT); // 마지막으로 받은 스크롤 위치
 
   const selectedIndex = Math.max(0, items.indexOf(selected));
@@ -190,7 +196,13 @@ function WheelColumn({ items, selected, onSelect }: Column) {
         useNativeDriver: true,
         listener: handleScroll,
       })}
+      contentOffset={initialOffset}
       onLayout={() => scrollToIndex(selectedIndex, false)} // 처음 열릴 때 선택값을 가운데로
+      // 숫자 목록 크기가 다 잡힌 뒤에도 아직 자기 자리에 못 갔으면 한 번 더 옮겨요
+      // (안드로이드는 목록 크기를 재기 전에 옮기라고 하면 맨 위에 그대로 있을 수 있어요)
+      onContentSizeChange={() => {
+        if (pendingTarget.current !== null) scrollToIndex(pendingTarget.current, false);
+      }}
     >
       {items.map((item, index) => {
         // 이 숫자가 가운데에 올 때의 스크롤 위치를 기준으로, 위아래로 멀어질수록 작고 흐리게
@@ -203,7 +215,10 @@ function WheelColumn({ items, selected, onSelect }: Column) {
           <Pressable
             key={item}
             style={styles.item}
-            onPress={() => scrollToIndex(index, true)}
+            onPress={() => {
+              pendingTarget.current = null; // 사용자가 직접 고른 거라 이 칸으로 확정해요
+              scrollToIndex(index, true);
+            }}
             accessibilityRole="button"
             accessibilityState={{ selected: item === selected }}>
             <Animated.Text style={[styles.text, { opacity, transform: [{ scale }] }]}>{item}</Animated.Text>
