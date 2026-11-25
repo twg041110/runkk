@@ -85,7 +85,9 @@ function WheelColumn({ items, selected, onSelect }: Column) {
   const [passToParent, setPassToParent] = useState(true);
   // 바깥에서 값이 바뀌어(예: 칩을 누름) 코드가 휠을 굴리는 중일 때의 목표 칸.
   // 굴러가다 잠깐 멈춰도 "사용자가 여기서 멈췄다"로 착각해 중간 값을 고르지 않고, 목표까지 마저 굴려요.
-  const pendingTarget = useRef<number | null>(null);
+  // 처음 만들어질 때도 "지금 값의 칸"을 목표로 둬요. 안드로이드는 휠이 생기자마자 맨 위(0)에서 스크롤 신호를
+  // 한 번 보내는데, 이걸 "사용자가 0까지 굴렸다"로 착각하면 값이 0으로 바뀌어요. 자기 자리에 도착하면 풀려요.
+  const pendingTarget = useRef<number | null>(Math.max(0, items.indexOf(selected)));
   const lastY = useRef((Math.max(0, items.indexOf(selected)) + OVERSCROLL_ROWS) * ITEM_HEIGHT); // 마지막으로 받은 스크롤 위치
 
   const selectedIndex = Math.max(0, items.indexOf(selected));
