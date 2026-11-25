@@ -12,6 +12,10 @@ export default function ProfileScreen() {
       <Pressable style={styles.button} onPress={() => router.push('/settings')} accessibilityRole="button">
         <Text style={styles.label}>설정 열기 (임시)</Text>
       </Pressable>
+      {/* TODO(임시 입구): 홈의 가운데 러닝 버튼과 연결되면 이 버튼은 지워요 */}
+      <Pressable style={[styles.button, styles.runButton]} onPress={() => router.push('/run')} accessibilityRole="button">
+        <Text style={styles.label}>러닝 시작 (임시)</Text>
+      </Pressable>
     </View>
   );
 }
@@ -29,6 +33,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderRadius: 999,
     backgroundColor: Palette.ink,
+  },
+  runButton: {
+    bottom: 196,
   },
   label: {
     fontSize: 14,

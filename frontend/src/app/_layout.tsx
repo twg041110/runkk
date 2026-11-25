@@ -39,6 +39,8 @@ export default function RootLayout() {
               <Stack.Screen name="(tabs)" />
               {/* 설정은 탭 바 없이 전체 화면으로 열린다 */}
               <Stack.Screen name="settings" />
+              {/* 러닝(시작 → 카운트다운 → 러닝 중 → 결과)도 탭 바 없이 전체 화면으로 열린다 */}
+              <Stack.Screen name="run" />
             </Stack.Protected>
             <Stack.Protected guard={!signedIn}>
               <Stack.Screen name="(auth)/login" />
