@@ -13,6 +13,7 @@
  *    맨 처음/맨 끝 숫자도 가운데 띠까지 올 수 있게 해요.
  * 2. snapToInterval: 손을 떼면 한 칸(ITEM_HEIGHT) 단위로 딱 맞춰 멈춰요.
  * 3. 스크롤 위치(y) ÷ 한 칸 높이 = 지금 가운데 있는 칸 번호예요.
+ *    숫자 크기 · 진하기는 스크롤 위치에 맞춰 계속 바뀌어서(가운데일수록 크고 진하게) 부드럽게 굴러가요.
  * 4. 움직임이 멈추고 0.15초 지나면 그 칸을 "선택"으로 확정해요(onSelect).
  *
  * 사용 예 (러닝 목표 시간·거리 휠에서도 그대로 쓸 수 있어요):
@@ -21,8 +22,9 @@
  *     { items: ['1', '2', ..., '12'], selected: '10', onSelect: (v) => ... },
  *   ]} />
  */
-import { useEffect, useRef, useState, type ComponentRef } from 'react';
+import { useEffect, useRef, type ComponentRef } from 'react';
 import {
+  Animated,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -71,16 +73,16 @@ function WheelColumn({ items, selected, onSelect }: Column) {
   const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const selectedIndex = Math.max(0, items.indexOf(selected));
-  // 지금 가운데 띠에 걸려 있는 칸 번호. 굴리는 동안 계속 바뀌어서 글자 진하기를 바꿔요.
-  const [centerIndex, setCenterIndex] = useState(selectedIndex);
+  // 지금 스크롤 위치(y). 숫자마다 이 값을 보고 크기 · 진하기를 계속 바꿔서,
+  // 굴리는 동안 숫자가 "칸마다 뚝뚝" 바뀌지 않고 부드럽게 커지고 작아져요.
+  const scrollY = useRef(new Animated.Value(selectedIndex * ITEM_HEIGHT)).current;
 
   // index번째 칸을 가운데로 보내기. 위에 빈 공간이 있어서 y = index × 칸 높이면 딱 가운데예요.
   const scrollToIndex = (index: number, animated: boolean) =>
     scrollRef.current?.scrollTo({ y: index * ITEM_HEIGHT, animated });
 
-  // 바깥에서 선택값이 바뀌면(예: 시작 → 종료 칸으로 바꿈) 휠도 그 값으로 굴려요.
+  // 바깥에서 선택값이 바뀌면(예: 시작 → 종료 칸으로 바꿈, 칩을 누름) 휠도 그 값으로 굴려요.
   useEffect(() => {
-    setCenterIndex(selectedIndex);
     scrollToIndex(selectedIndex, true);
   }, [selectedIndex]);
 
@@ -93,7 +95,6 @@ function WheelColumn({ items, selected, onSelect }: Column) {
     const y = event.nativeEvent.contentOffset.y;
     // 반올림해서 가장 가까운 칸, 그리고 0 ~ 마지막 칸 사이로 제한
     const index = Math.min(items.length - 1, Math.max(0, Math.round(y / ITEM_HEIGHT)));
-    setCenterIndex(index);
 
     // 스크롤이 계속되는 동안은 타이머를 다시 걸어서, 진짜 멈췄을 때만 확정돼요.
     if (settleTimer.current) clearTimeout(settleTimer.current);
@@ -104,7 +105,7 @@ function WheelColumn({ items, selected, onSelect }: Column) {
   };
 
   return (
-    <ScrollView
+    <Animated.ScrollView
       ref={scrollRef}
       style={styles.column}
       contentContainerStyle={styles.content}
@@ -113,11 +114,19 @@ function WheelColumn({ items, selected, onSelect }: Column) {
       decelerationRate="fast"
       scrollEventThrottle={16} // 굴리는 동안 1초에 약 60번 위치를 알려줘요
       nestedScrollEnabled // 스크롤되는 화면 안에 들어가도 안드로이드에서 휠이 굴러가요
-      onScroll={handleScroll}
+      // 스크롤 위치를 scrollY에 바로 넣고(useNativeDriver: 화면 쪽에서 계산해서 끊김 없음), 확정 타이머도 같이 돌려요
+      onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
+        useNativeDriver: true,
+        listener: handleScroll,
+      })}
       onLayout={() => scrollToIndex(selectedIndex, false)} // 처음 열릴 때 선택값을 가운데로
     >
       {items.map((item, index) => {
-        const distance = Math.abs(index - centerIndex); // 가운데에서 몇 칸 떨어졌나
+        // 이 숫자가 가운데에 올 때의 스크롤 위치를 기준으로, 위아래로 멀어질수록 작고 흐리게
+        const center = index * ITEM_HEIGHT;
+        const inputRange = [center - 2 * ITEM_HEIGHT, center - ITEM_HEIGHT, center, center + ITEM_HEIGHT, center + 2 * ITEM_HEIGHT];
+        const scale = scrollY.interpolate({ inputRange, outputRange: [0.78, 0.88, 1.1, 0.88, 0.78], extrapolate: 'clamp' });
+        const opacity = scrollY.interpolate({ inputRange, outputRange: [0.25, 0.5, 1, 0.5, 0.25], extrapolate: 'clamp' });
         return (
           // 숫자를 눌러도 그 값으로 굴러가요
           <Pressable
@@ -126,18 +135,11 @@ function WheelColumn({ items, selected, onSelect }: Column) {
             onPress={() => scrollToIndex(index, true)}
             accessibilityRole="button"
             accessibilityState={{ selected: item === selected }}>
-            <Text
-              style={[
-                styles.text,
-                distance === 0 && styles.textCenter,
-                distance >= 2 && styles.textFar,
-              ]}>
-              {item}
-            </Text>
+            <Animated.Text style={[styles.text, { opacity, transform: [{ scale }] }]}>{item}</Animated.Text>
           </Pressable>
         );
       })}
-    </ScrollView>
+    </Animated.ScrollView>
   );
 }
 
@@ -180,16 +182,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   text: {
-    fontSize: 17,
-    color: Palette.muted,
-  },
-  textCenter: {
     fontSize: 20,
     fontWeight: '700',
     color: Palette.ink,
-  },
-  textFar: {
-    fontSize: 15,
-    color: '#C9CBD1',
   },
 });

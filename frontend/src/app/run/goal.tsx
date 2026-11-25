@@ -9,10 +9,15 @@
  *   아무것도 안 고르면 버튼이 회색이고 눌리지 않아요.
  *
  * 목표 거리는 설정의 거리 단위와 상관없이 km로 정해요. (Figma 기준)
+ *
+ * 부드러운 움직임 (react-native-reanimated)
+ * - 카드를 체크하면 카드 높이가 0.25초 동안 늘어나고, 안의 휠 · 칩은 서서히 나타나요. (LinearTransition, FadeIn)
+ * - 아래 카드 · 페이스 카드도 갑자기 튀지 않고 미끄러지듯 자리를 옮겨요.
  */
 import { router } from 'expo-router';
 import { useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CheckIcon, ChevronLeftIcon, CloseIcon, PlayIcon } from '@/components/common/icons';
@@ -33,6 +38,9 @@ const MARATHON_CHIPS = [
   { label: '하프', meters: 21097.5 },
   { label: '풀', meters: 42195 },
 ];
+// 카드가 늘어나고 줄어드는 속도 (0.25초)
+const LAYOUT = LinearTransition.duration(250);
+
 const TIME_CHIPS = [
   { label: '20분', sec: 20 * 60 },
   { label: '30분', sec: 30 * 60 },
@@ -150,7 +158,7 @@ export default function RunGoalScreen() {
         </GoalCard>
 
         {paceSecPerKm ? (
-          <View style={styles.paceCard}>
+          <Animated.View style={styles.paceCard} layout={LAYOUT} entering={FadeIn.duration(250)} exiting={FadeOut.duration(150)}>
             <Text style={styles.paceLabel}>목표 페이스</Text>
             <View style={styles.paceRight}>
               <Text style={styles.paceValue}>
@@ -159,9 +167,11 @@ export default function RunGoalScreen() {
               </Text>
               <Text style={styles.paceAuto}>자동 계산</Text>
             </View>
-          </View>
+          </Animated.View>
         ) : (
-          <Text style={styles.footnote}>거리와 시간을 모두 고르면 페이스가 자동으로 계산돼요</Text>
+          <Animated.View layout={LAYOUT} entering={FadeIn.duration(250)} exiting={FadeOut.duration(150)}>
+            <Text style={styles.footnote}>거리와 시간을 모두 고르면 페이스가 자동으로 계산돼요</Text>
+          </Animated.View>
         )}
       </ScrollView>
 
@@ -208,7 +218,7 @@ function GoalCard({
   children: ReactNode;
 }) {
   return (
-    <View style={styles.card}>
+    <Animated.View style={styles.card} layout={LAYOUT}>
       <Pressable
         style={styles.cardHeader}
         onPress={onToggle}
@@ -225,8 +235,12 @@ function GoalCard({
           <Text style={styles.cardUnit}> {unit}</Text>
         </Text>
       </Pressable>
-      {checked && <View style={styles.cardBody}>{children}</View>}
-    </View>
+      {checked && (
+        <Animated.View style={styles.cardBody} entering={FadeIn.duration(250)} exiting={FadeOut.duration(150)}>
+          {children}
+        </Animated.View>
+      )}
+    </Animated.View>
   );
 }
 
@@ -280,6 +294,7 @@ const styles = StyleSheet.create({
     color: Palette.muted,
   },
   card: {
+    overflow: 'hidden', // 카드가 늘어나는 동안 안의 내용이 카드 밖으로 삐져나오지 않게
     borderRadius: 20,
     borderWidth: 1,
     borderColor: Palette.border,
