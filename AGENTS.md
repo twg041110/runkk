@@ -201,8 +201,9 @@ JDK 25가 필요합니다. 테스트는 `./gradlew test`(H2 메모리 DB)로 돌
   - `(auth)/login`: 로그인
   - `(tabs)`: 홈, 커뮤니티, 코스, 친구, 내 정보 (탭 바는 `components/common/app-tabs.tsx`)
   - `settings/*`: 설정 화면들 (main에 합쳐짐)
-  - `run/*`: 바로 러닝 흐름 (시작 → 카운트다운 → 러닝 중 → 결과). **`feature/jinhwan-running` 브랜치에만 있고 main에는 아직 없음**
-- 임시 입구: 내 정보 탭의 "설정 열기 (임시)" 버튼, 그리고 러닝 브랜치의 "러닝 시작 (임시)" 버튼. 정식 입구가 생기면 지울 예정입니다.
+  - `run/*`: 바로 러닝 흐름 (시작 → 위치 권한 → 카운트다운 → 러닝 중 → 결과, main에 합쳐짐). 러닝 상태는 `hooks/use-run-session.tsx`, 지도는 `components/run/run-map.tsx`(폰) · `run-map.web.tsx`(웹은 격자 그림)
+    - 아직 안 된 것: 기록 서버 저장(`TODO(API)` POST /api/runs), 이번 주 기록은 예시 값(`FAKE_WEEK`), 목표 정하고 달리기 · 코스 정하기, 화면 켜짐 유지 · 음성 안내
+- 임시 입구: 내 정보 탭의 "설정 열기 (임시)", "러닝 시작 (임시)" 버튼. 정식 입구(홈 가운데 러닝 버튼 등)가 생기면 지울 예정입니다.
 
 ### 6-4. 실행
 
@@ -214,6 +215,8 @@ npx tsc --noEmit       # 타입 오류 확인 (커밋 전에 0개여야 함)
 ```
 - 휴대폰 Expo Go 앱이 **SDK 58을 지원하는 버전**이어야 합니다.
 - 러닝 기능(`expo-location`, `react-native-maps`)은 폰 위치 권한과 **폰 위치(GPS) 켜짐**이 필요합니다. 실내에서는 GPS가 약해서 거리가 안 늘 수 있습니다.
+- 지도는 Expo Go에서는 키 없이 됩니다. APK · 앱스토어용으로 빌드할 때는 **구글 지도 API 키**가 필요합니다(키는 깃에 올리지 않음).
+- 새로 받은 직후 `npx tsc`에서 `animated-icon.module.css` 오류가 나면, `npx expo start`를 한 번 실행하세요. Expo가 `expo-env.d.ts`(깃에 없음)를 만들어 주면 사라집니다.
 
 ---
 
@@ -264,6 +267,6 @@ npx tsc --noEmit       # 타입 오류 확인 (커밋 전에 0개여야 함)
 | GitHub Actions 배포가 `Queued`에서 멈춤 | AWS 서버가 꺼졌거나 러너 서비스가 멈춤(4장 참고) |
 | 배포 중 빌드가 멈추거나 `Killed` | 서버 메모리 부족. 스왑이 켜져 있는지 `free -h`로 확인 |
 | pull 받은 뒤 앱이 빨간 오류 (모듈 없음) | `npm install`을 안 함 |
-| `Location request failed due to unsatisfied device settings` | 폰의 위치(GPS) 스위치가 꺼짐. 빠른 설정에서 위치를 켬 (러닝 브랜치는 팝업으로 안내하도록 고침) |
+| `Location request failed due to unsatisfied device settings` | 폰의 위치(GPS) 스위치가 꺼짐. 빠른 설정에서 위치를 켬 (러닝 시작 화면에서 "위치가 꺼져 있어요" 팝업으로 안내함) |
 | Expo Go에서 프로젝트가 안 열림 | Expo Go 버전이 SDK 58과 안 맞음. 앱 업데이트 |
 | 백엔드 테스트 리포트 생성 오류 | 테스트 메서드 이름이 한글임. 영어 이름 + `@DisplayName` |
