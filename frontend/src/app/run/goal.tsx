@@ -13,12 +13,19 @@
  * 부드러운 움직임 (react-native-reanimated)
  * - 카드를 체크하면 카드 높이가 0.25초 동안 늘어나고, 안의 휠 · 칩은 서서히 나타나요. (LinearTransition, FadeIn)
  * - 아래 카드 · 페이스 카드도 갑자기 튀지 않고 미끄러지듯 자리를 옮겨요.
+ *
+ * 시작 버튼 뒤 가림막 (BottomFade)
+ * - 버튼 조금 위부터 화면 아래까지: 위쪽은 흐리게(블러, expo-blur), 버튼 근처로 갈수록 배경색으로 완전히 덮어서
+ *   스크롤되는 내용이 버튼 뒤로 비쳐 보이지 않게 해요.
+ * - 안드로이드는 블러할 내용(ScrollView)을 BlurTargetView로 감싸야 진짜 블러가 돼요.
  */
 import { router } from 'expo-router';
-import { useState, type ReactNode } from 'react';
+import { BlurTargetView, BlurView } from 'expo-blur';
+import { useRef, useState, type ComponentRef, type ReactNode, type RefObject } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
 import { CheckIcon, ChevronLeftIcon, CloseIcon, PlayIcon } from '@/components/common/icons';
 import { WheelPicker } from '@/components/common/wheel-picker';
@@ -38,6 +45,10 @@ const MARATHON_CHIPS = [
   { label: '하프', meters: 21097.5 },
   { label: '풀', meters: 42195 },
 ];
+// 시작 버튼 높이(대략)와, 버튼 위로 서서히 가려지는 구간의 높이
+const START_BUTTON_HEIGHT = 80;
+const FADE_ABOVE_BUTTON = 56;
+
 // 카드가 늘어나고 줄어드는 속도 (0.25초)
 const LAYOUT = LinearTransition.duration(250);
 
@@ -51,6 +62,9 @@ const TIME_CHIPS = [
 export default function RunGoalScreen() {
   const insets = useSafeAreaInsets();
   const { setGoal } = useRunSession();
+  const blurTarget = useRef<ComponentRef<typeof View>>(null); // 안드로이드 블러가 흐리게 할 대상(스크롤 내용)
+  // 가림막 높이 = 버튼 아래 여백 + 버튼 + 버튼 위 서서히 가려지는 구간
+  const fadeHeight = insets.bottom + 16 + START_BUTTON_HEIGHT + FADE_ABOVE_BUTTON;
 
   const [distanceOn, setDistanceOn] = useState(false);
   const [timeOn, setTimeOn] = useState(false);
@@ -95,86 +109,91 @@ export default function RunGoalScreen() {
         </Pressable>
       </View>
 
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 120 }]}>
-        <View style={styles.titleBox}>
-          <Text style={styles.title}>목표 정하기</Text>
-          <Text style={styles.subtitle}>거리와 시간 중 하나만 골라도, 둘 다 골라도 돼요</Text>
-        </View>
-
-        {/* 거리 카드 */}
-        <GoalCard
-          title="거리"
-          description="얼마나 멀리 달릴까요"
-          checked={distanceOn}
-          onToggle={() => setDistanceOn(!distanceOn)}
-          value={(distanceM / 1000).toFixed(1)}
-          unit="km">
-          <WheelPicker
-            columns={[
-              // 다른 칸 값은 "지금 값"(d)에서 꺼내요. 화면을 그릴 때의 값(km, m)을 쓰면 그사이 칩으로 바뀐 값을 덮어써요
-              { items: KM_ITEMS, selected: String(km), onSelect: (v) => setDistanceM((d) => Number(v) * 1000 + Math.round((d % 1000) / 100) * 100), unit: 'km' },
-              { items: M_ITEMS, selected: String(m).padStart(3, '0'), onSelect: (v) => setDistanceM((d) => Math.floor(d / 1000) * 1000 + Number(v)), unit: 'm' },
-            ]}
-          />
-          <Text style={styles.chipTitle}>자주 쓰는 거리</Text>
-          <View style={styles.chips}>
-            {DISTANCE_CHIPS.map((meters) => (
-              <Chip key={meters} label={`${meters / 1000}km`} selected={distanceM === meters} onPress={() => setDistanceM(meters)} />
-            ))}
+      <BlurTargetView ref={blurTarget} style={styles.fill}>
+        {/* 맨 아래 내용도 가림막 위로 올라와 보이도록 가림막 높이만큼 아래 여백을 둬요 */}
+        <ScrollView contentContainerStyle={[styles.content, { paddingBottom: fadeHeight + 8 }]}>
+          <View style={styles.titleBox}>
+            <Text style={styles.title}>목표 정하기</Text>
+            <Text style={styles.subtitle}>거리와 시간 중 하나만 골라도, 둘 다 골라도 돼요</Text>
           </View>
-          <Text style={styles.chipTitle}>마라톤</Text>
-          <View style={styles.chips}>
-            {MARATHON_CHIPS.map((chip) => (
-              <Chip
-                key={chip.label}
-                label={chip.label}
-                sub={`${chip.meters / 1000}km`}
-                selected={distanceM === chip.meters}
-                onPress={() => setDistanceM(chip.meters)}
-              />
-            ))}
-          </View>
-        </GoalCard>
 
-        {/* 시간 카드 */}
-        <GoalCard
-          title="시간"
-          description="얼마나 오래 달릴까요"
-          checked={timeOn}
-          onToggle={() => setTimeOn(!timeOn)}
-          value={String(min)}
-          unit={sec > 0 ? `분 ${sec}초` : '분'}>
-          <WheelPicker
-            columns={[
-              { items: MIN_ITEMS, selected: String(min), onSelect: (v) => setTimeSec((t) => Number(v) * 60 + (t % 60)), unit: '분' },
-              { items: SEC_ITEMS, selected: String(sec).padStart(2, '0'), onSelect: (v) => setTimeSec((t) => Math.floor(t / 60) * 60 + Number(v)), unit: '초' },
-            ]}
-          />
-          <Text style={styles.chipTitle}>자주 쓰는 시간</Text>
-          <View style={styles.chips}>
-            {TIME_CHIPS.map((chip) => (
-              <Chip key={chip.label} label={chip.label} selected={timeSec === chip.sec} onPress={() => setTimeSec(chip.sec)} />
-            ))}
-          </View>
-        </GoalCard>
-
-        {paceSecPerKm ? (
-          <Animated.View style={styles.paceCard} layout={LAYOUT} entering={FadeIn.duration(250)} exiting={FadeOut.duration(150)}>
-            <Text style={styles.paceLabel}>목표 페이스</Text>
-            <View style={styles.paceRight}>
-              <Text style={styles.paceValue}>
-                {formatPaceSec(paceSecPerKm)}
-                <Text style={styles.paceUnit}> /km</Text>
-              </Text>
-              <Text style={styles.paceAuto}>자동 계산</Text>
+          {/* 거리 카드 */}
+          <GoalCard
+            title="거리"
+            description="얼마나 멀리 달릴까요"
+            checked={distanceOn}
+            onToggle={() => setDistanceOn(!distanceOn)}
+            value={(distanceM / 1000).toFixed(1)}
+            unit="km">
+            <WheelPicker
+              columns={[
+                // 다른 칸 값은 "지금 값"(d)에서 꺼내요. 화면을 그릴 때의 값(km, m)을 쓰면 그사이 칩으로 바뀐 값을 덮어써요
+                { items: KM_ITEMS, selected: String(km), onSelect: (v) => setDistanceM((d) => Number(v) * 1000 + Math.round((d % 1000) / 100) * 100), unit: 'km' },
+                { items: M_ITEMS, selected: String(m).padStart(3, '0'), onSelect: (v) => setDistanceM((d) => Math.floor(d / 1000) * 1000 + Number(v)), unit: 'm' },
+              ]}
+            />
+            <Text style={styles.chipTitle}>자주 쓰는 거리</Text>
+            <View style={styles.chips}>
+              {DISTANCE_CHIPS.map((meters) => (
+                <Chip key={meters} label={`${meters / 1000}km`} selected={distanceM === meters} onPress={() => setDistanceM(meters)} />
+              ))}
             </View>
-          </Animated.View>
-        ) : (
-          <Animated.View layout={LAYOUT} entering={FadeIn.duration(250)} exiting={FadeOut.duration(150)}>
-            <Text style={styles.footnote}>거리와 시간을 모두 고르면 페이스가 자동으로 계산돼요</Text>
-          </Animated.View>
-        )}
-      </ScrollView>
+            <Text style={styles.chipTitle}>마라톤</Text>
+            <View style={styles.chips}>
+              {MARATHON_CHIPS.map((chip) => (
+                <Chip
+                  key={chip.label}
+                  label={chip.label}
+                  sub={`${chip.meters / 1000}km`}
+                  selected={distanceM === chip.meters}
+                  onPress={() => setDistanceM(chip.meters)}
+                />
+              ))}
+            </View>
+          </GoalCard>
+
+          {/* 시간 카드 */}
+          <GoalCard
+            title="시간"
+            description="얼마나 오래 달릴까요"
+            checked={timeOn}
+            onToggle={() => setTimeOn(!timeOn)}
+            value={String(min)}
+            unit={sec > 0 ? `분 ${sec}초` : '분'}>
+            <WheelPicker
+              columns={[
+                { items: MIN_ITEMS, selected: String(min), onSelect: (v) => setTimeSec((t) => Number(v) * 60 + (t % 60)), unit: '분' },
+                { items: SEC_ITEMS, selected: String(sec).padStart(2, '0'), onSelect: (v) => setTimeSec((t) => Math.floor(t / 60) * 60 + Number(v)), unit: '초' },
+              ]}
+            />
+            <Text style={styles.chipTitle}>자주 쓰는 시간</Text>
+            <View style={styles.chips}>
+              {TIME_CHIPS.map((chip) => (
+                <Chip key={chip.label} label={chip.label} selected={timeSec === chip.sec} onPress={() => setTimeSec(chip.sec)} />
+              ))}
+            </View>
+          </GoalCard>
+
+          {paceSecPerKm ? (
+            <Animated.View style={styles.paceCard} layout={LAYOUT} entering={FadeIn.duration(250)} exiting={FadeOut.duration(150)}>
+              <Text style={styles.paceLabel}>목표 페이스</Text>
+              <View style={styles.paceRight}>
+                <Text style={styles.paceValue}>
+                  {formatPaceSec(paceSecPerKm)}
+                  <Text style={styles.paceUnit}> /km</Text>
+                </Text>
+                <Text style={styles.paceAuto}>자동 계산</Text>
+              </View>
+            </Animated.View>
+          ) : (
+            <Animated.View layout={LAYOUT} entering={FadeIn.duration(250)} exiting={FadeOut.duration(150)}>
+              <Text style={styles.footnote}>거리와 시간을 모두 고르면 페이스가 자동으로 계산돼요</Text>
+            </Animated.View>
+          )}
+        </ScrollView>
+      </BlurTargetView>
+
+      <BottomFade height={fadeHeight} blurTarget={blurTarget} />
 
       {/* 아래 고정 시작 버튼 */}
       <Pressable
@@ -196,6 +215,36 @@ export default function RunGoalScreen() {
       </Pressable>
 
       {dialogs}
+    </View>
+  );
+}
+
+/**
+ * 시작 버튼 뒤 가림막: 블러 위에 배경색을 "투명 → 불투명"으로 덮어요.
+ * 버튼 윗선 조금 위에서 완전히 불투명해져서, 버튼 근처에서는 뒤 내용이 전혀 안 보여요.
+ */
+function BottomFade({ height, blurTarget }: { height: number; blurTarget: RefObject<ComponentRef<typeof View> | null> }) {
+  // 0(맨 위)에서 opaqueAt(버튼 윗선보다 살짝 위)까지 서서히 진해지고, 그 아래는 완전히 덮어요
+  const opaqueAt = (FADE_ABOVE_BUTTON * 0.85) / height;
+  return (
+    <View style={[styles.fade, { height }]} pointerEvents="none">
+      <BlurView
+        style={StyleSheet.absoluteFill}
+        intensity={18}
+        tint="light"
+        blurTarget={blurTarget}
+        blurMethod="dimezisBlurViewSdk31Plus" // 안드로이드 12 이상에서 진짜 블러 (그 아래 버전은 반투명)
+      />
+      <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
+        <Defs>
+          <LinearGradient id="bottomFade" x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0" stopColor={Palette.background} stopOpacity={0} />
+            <Stop offset={opaqueAt} stopColor={Palette.background} stopOpacity={1} />
+            <Stop offset="1" stopColor={Palette.background} stopOpacity={1} />
+          </LinearGradient>
+        </Defs>
+        <Rect x="0" y="0" width="100%" height="100%" fill="url(#bottomFade)" />
+      </Svg>
     </View>
   );
 }
@@ -421,6 +470,15 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontSize: 12,
     color: Palette.hint,
+  },
+  fill: {
+    flex: 1,
+  },
+  fade: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   startButton: {
     position: 'absolute',

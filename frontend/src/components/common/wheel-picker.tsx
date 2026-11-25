@@ -16,7 +16,7 @@
  *    숫자 크기 · 진하기는 스크롤 위치에 맞춰 계속 바뀌어서(가운데일수록 크고 진하게) 부드럽게 굴러가요.
  * 4. 손을 뗀 뒤 움직임이 멈추고 0.15초 지나면 그 칸을 "선택"으로 확정해요(onSelect).
  * 5. 끝 숫자 너머에 여유 칸(OVERSCROLL_ROWS)이 있어서, 끝에서 더 굴려도 바깥 화면은 그대로이고
- *    손을 떼면 끝 숫자로 되돌아와요.
+ *    손을 떼면 기다리지 않고 바로 끝 숫자로 부드럽게 되돌아와요.
  *
  * 사용 예 (러닝 목표 시간·거리 휠에서도 그대로 쓸 수 있어요):
  *   <WheelPicker columns={[
@@ -115,6 +115,21 @@ function WheelColumn({ items, selected, onSelect }: Column) {
     }, 150);
   };
 
+  // 끝 숫자 너머(여유 칸)에 있으면 되돌아갈 칸 번호, 아니면 null
+  const overscrolledTo = (y: number) => {
+    if (y < yOf(0) - 1) return 0;
+    if (y > yOf(items.length - 1) + 1) return items.length - 1;
+    return null;
+  };
+
+  // 끝 너머에서 손을 떼면 기다리지 않고 바로 끝 숫자로 부드럽게 돌아가요 (멈칫하지 않게)
+  const returnNow = (index: number) => {
+    if (settleTimer.current) clearTimeout(settleTimer.current);
+    pendingTarget.current = index; // 돌아가는 동안의 스크롤은 "사용자가 멈춘 것"으로 보지 않아요
+    scrollToIndex(index, true);
+    if (items[index] !== selected) onSelect(items[index]);
+  };
+
   // 바깥에서 선택값이 바뀌면(예: 시작 → 종료 칸으로 바꿈, 칩을 누름) 휠도 그 값으로 굴려요.
   useEffect(() => {
     // 이미 그 칸에 있으면(사용자가 굴려서 고른 값) 목표로 기억할 필요가 없어요
@@ -137,7 +152,10 @@ function WheelColumn({ items, selected, onSelect }: Column) {
       if (settleTimer.current) clearTimeout(settleTimer.current);
       return;
     }
-    if (!dragging.current) settle(y);
+    if (dragging.current) return; // 손가락으로 끄는 중에는 끝 너머로도 움직일 수 있어요
+    const edge = overscrolledTo(y);
+    if (edge !== null && pendingTarget.current === null) returnNow(edge); // 미끄러지다 끝을 넘으면 바로 돌아가요
+    else settle(y);
   };
 
   return (
@@ -160,7 +178,10 @@ function WheelColumn({ items, selected, onSelect }: Column) {
       onScrollEndDrag={(event) => {
         dragging.current = false;
         setPassToParent(true);
-        settle(event.nativeEvent.contentOffset.y); // 손을 떼면 확정 (계속 미끄러지면 onScroll이 다시 미뤄요)
+        const y = event.nativeEvent.contentOffset.y;
+        const edge = overscrolledTo(y);
+        if (edge !== null) returnNow(edge); // 끝 너머에서 손을 떼면 바로 돌아가요
+        else settle(y); // 손을 떼면 확정 (계속 미끄러지면 onScroll이 다시 미뤄요)
       }}
       // 스크롤 위치를 scrollY에 바로 넣고(useNativeDriver: 화면 쪽에서 계산해서 끊김 없음), 확정 타이머도 같이 돌려요
       onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
