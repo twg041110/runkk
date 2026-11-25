@@ -106,11 +106,15 @@ export default function RunActiveScreen() {
         </View>
       )}
 
-      {/* 잠금: 화면 전체를 덮어서 아무것도 안 눌리게 하고, 잠금 버튼만 위로 다시 그려요 */}
+      {/* 잠금: 화면 전체를 덮어서 아무것도 안 눌리게 하고, 잠금 버튼만 위로 다시 그려요.
+          아래 버튼 줄과 똑같은 모양이 되도록 일시정지 · 종료 자리에 같은 크기의 빈 칸을 둬요
+          (빈 칸이 없으면 줄 높이가 달라져서 잠금 버튼이 아래로 밀려요) */}
       {locked && (
         <Pressable style={styles.lockOverlay} onPress={() => setNotice('잠금 버튼을 길게 누르면 풀려요')}>
           <View style={[styles.controls, styles.lockOnly, { bottom: insets.bottom + 24 }]}>
             <LockButton locked onLock={() => {}} onUnlock={() => setLocked(false)} />
+            <View style={styles.bigButton} />
+            <View style={styles.holdWrap} />
           </View>
         </Pressable>
       )}
@@ -363,7 +367,5 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    // 잠금 버튼은 원래 자리(왼쪽 첫 번째)에 다시 그려요: 일시정지(92) + 종료(64) + 간격 자리만큼 비워 둬요
-    paddingRight: 92 + 64 + 28 * 2,
   },
 });
