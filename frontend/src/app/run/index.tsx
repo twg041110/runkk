@@ -12,7 +12,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ChevronLeftIcon, ChevronRightIcon, PlayIcon } from '@/components/common/icons';
+import { ChevronRightIcon, CloseIcon, PlayIcon } from '@/components/common/icons';
 import { CircleReveal, RevealItem } from '@/components/run/circle-reveal';
 import { Palette } from '@/constants/theme';
 import { useLocationCheck } from '@/hooks/use-location-check';
@@ -39,8 +39,9 @@ export default function RunStartScreen() {
       <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
         <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
           <RevealItem index={0} active={reveal}>
-            <Pressable style={styles.back} onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="뒤로 가기">
-              <ChevronLeftIcon color={Palette.ink} size={24} />
+            {/* 홈 위에 펼쳐지는 화면이라 "뒤로" 대신 "닫기"(X)로 둬요. 누르면 홈으로 돌아가요 */}
+            <Pressable style={styles.back} onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="닫기">
+              <CloseIcon color={Palette.ink} size={22} />
             </Pressable>
           </RevealItem>
 
