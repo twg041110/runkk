@@ -33,6 +33,9 @@ public final class CourseRepositories {
                 """)
         Page<Course> search(@Param("region") String region, @Param("difficulty") Member.Level difficulty,
                 @Param("maxKm") BigDecimal maxKm, @Param("keyword") String keyword, Pageable pageable);
+
+        /** 같은 이름의 코스가 이미 있는지 (courses.json을 두 번 넣지 않으려고) */
+        boolean existsByName(String name);
     }
 
     public interface CourseFeatureRepository extends JpaRepository<CourseFeature, Long> {
