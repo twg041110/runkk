@@ -22,11 +22,12 @@ export function BellIcon(props: IconProps) {
   );
 }
 
-export function LocateIcon(props: IconProps) {
+// 해 (홈 화면 날씨)
+export function SunIcon(props: IconProps) {
   return (
     <LineIcon {...props}>
       <Circle cx={12} cy={12} r={4} />
-      <Path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+      <Path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4" />
     </LineIcon>
   );
 }
