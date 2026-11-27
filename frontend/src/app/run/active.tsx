@@ -15,6 +15,11 @@
  * - 오른쪽 위에 "목표 5.0km · 30분", 큰 숫자 아래에 진행 막대(GoalProgress)가 보여요.
  * - 시간 목표만 있으면 큰 숫자가 시간이에요. 목표를 채우면 알림만 띄우고 러닝은 계속돼요.
  *
+ * 코스 러닝 (Figma: 코스 정하기 - 여의도 한바퀴 - 러닝 중, 코스 이탈)
+ * - 오른쪽 위에 코스 이름(목표 시간을 정했으면 "· 목표 29:00"), 지도에 코스(달린 만큼 노랑, 남은 만큼 회색)
+ * - 진행 막대 아래 "코스 3.2km", 작은 카드 세 번째는 칼로리 대신 "남은 거리"
+ * - 코스에서 50m 넘게 벗어나면 아래쪽에 "코스에서 120m 벗어났어요" 안내가 떠요.
+ *
  * 안드로이드 뒤로 가기 버튼은 막아 뒀어요 (실수로 러닝이 끊기지 않게).
  */
 import { router } from 'expo-router';
@@ -30,10 +35,12 @@ import { RunMap } from '@/components/run/run-map';
 import { RunStats } from '@/components/run/run-stats';
 import { Palette } from '@/constants/theme';
 import { useRunSession } from '@/hooks/use-run-session';
-import { formatGoalLabel } from '@/utils/run-format';
+import { distanceToRoute } from '@/utils/geo';
+import { formatDuration, formatGoalLabel } from '@/utils/run-format';
 import { isGoalReached } from '@/utils/run-goal';
 
 const HOLD_TO_STOP_MS = 1500; // 종료 버튼을 이만큼 눌러야 끝나요
+const OFF_COURSE_M = 50; // 코스에서 이보다 멀어지면 "코스에서 벗어났어요" 안내
 const STATUS_LABEL = {
   running: '러닝 중',
   paused: '일시정지',
@@ -42,7 +49,7 @@ const STATUS_LABEL = {
 
 export default function RunActiveScreen() {
   const insets = useSafeAreaInsets();
-  const { status, elapsedSec, distanceM, points, gpsWeak, goal, goalReachedSec, pause, resume, finish } = useRunSession();
+  const { status, elapsedSec, distanceM, points, gpsWeak, goal, goalReachedSec, course, pause, resume, finish } = useRunSession();
   const [locked, setLocked] = useState(false);
   const [notice, setNotice] = useState('');
 
@@ -61,8 +68,12 @@ export default function RunActiveScreen() {
   // 목표 러닝: 목표를 처음 채운 순간 한 번 알려 줘요 (러닝은 멈추지 않고 계속돼요)
   const reached = goal !== null && isGoalReached(goal, { distanceM, elapsedSec, goalReachedSec });
   useEffect(() => {
-    if (reached) setNotice('목표 달성! 계속 달려도 되고, 종료해도 돼요');
-  }, [reached]);
+    if (reached) setNotice(course ? '코스 완주! 계속 달려도 되고, 종료해도 돼요' : '목표 달성! 계속 달려도 되고, 종료해도 돼요');
+  }, [reached, course]);
+
+  // 코스 러닝: 지금 위치가 코스에서 얼마나 떨어졌는지 (달리는 중일 때만 안내)
+  const here = points[points.length - 1];
+  const offM = course && here && shown === 'running' ? distanceToRoute(here, course.route) : 0;
 
   const end = () => {
     finish();
@@ -79,12 +90,18 @@ export default function RunActiveScreen() {
           <View style={[styles.statusDot, shown !== 'running' && styles.statusDotPaused]} />
           <Text style={styles.statusText}>{label}</Text>
         </View>
-        <Text style={styles.mode}>{goal ? formatGoalLabel(goal) : '바로 러닝'}</Text>
+        <Text style={styles.mode}>
+          {course
+            ? `${course.name}${goal?.timeSec ? ` · 목표 ${formatDuration(goal.timeSec)}` : ''}`
+            : goal
+              ? formatGoalLabel(goal)
+              : '바로 러닝'}
+        </Text>
       </View>
 
       <View style={styles.body}>
         <View>
-          <RunMap points={points} live />
+          <RunMap points={points} live course={course ? { route: course.route, doneM: distanceM } : undefined} />
           {/* 지도 위에 겹쳐 뜨는 안내. 자동 일시정지가 GPS 약함보다 먼저 보여요 */}
           {shown === 'autoPaused' ? (
             <Banner title="멈춰서 기록도 잠시 멈췄어요" description="다시 달리면 자동으로 이어서 기록해요" />
@@ -96,9 +113,30 @@ export default function RunActiveScreen() {
         <RunStats
           distanceM={distanceM}
           elapsedSec={elapsedSec}
-          primary={goal && !goal.distanceM && goal.timeSec ? 'time' : 'distance'}>
-          {goal && <GoalProgress goal={goal} distanceM={distanceM} elapsedSec={elapsedSec} goalReachedSec={goalReachedSec} />}
+          primary={goal && !goal.distanceM && goal.timeSec ? 'time' : 'distance'}
+          remainingM={course ? Math.max(course.distanceM - distanceM, 0) : undefined}>
+          {goal && (
+            <GoalProgress
+              goal={goal}
+              distanceM={distanceM}
+              elapsedSec={elapsedSec}
+              goalReachedSec={goalReachedSec}
+              caption={course ? `코스 ${(course.distanceM / 1000).toFixed(1)}km` : undefined}
+            />
+          )}
         </RunStats>
+
+        {offM > OFF_COURSE_M && (
+          <View style={styles.offCourse} accessibilityLiveRegion="polite">
+            <View style={styles.offIcon}>
+              <Text style={styles.offIconText}>!</Text>
+            </View>
+            <View style={styles.offText}>
+              <Text style={styles.bannerTitle}>코스에서 {Math.round(offM / 10) * 10}m 벗어났어요</Text>
+              <Text style={styles.bannerDescription}>지도의 코스 길로 돌아가면 이어서 안내해요</Text>
+            </View>
+          </View>
+        )}
       </View>
 
       {paused ? (
@@ -320,6 +358,34 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 14,
     backgroundColor: 'rgba(28, 30, 34, 0.92)',
+  },
+  // 코스 이탈 안내: 아래 버튼 바로 위에 붙어요
+  offCourse: {
+    marginTop: 'auto',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 16,
+    backgroundColor: 'rgba(28, 30, 34, 0.92)',
+  },
+  offIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Palette.alert,
+  },
+  offIconText: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: Palette.surface,
+  },
+  offText: {
+    flex: 1,
+    gap: 2,
   },
   bannerTitle: {
     fontSize: 14,

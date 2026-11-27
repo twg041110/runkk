@@ -5,45 +5,46 @@
  * - 노란 선(검은 테두리): 지나온 길
  * - 흰 점: 출발한 곳, 파란 점: 지금 있는 곳 (live일 때만)
  *
+ * 코스 러닝(course가 있을 때): 지나온 길 대신 코스를 그려요.
+ * - 회색 선: 아직 안 달린 코스, 노란 선: 달린 만큼(doneM)의 코스
+ * - 코스 상세 화면(아직 안 달림)에서는 출발점 옆에 "출발" 글자를 띄워요.
+ *
  * 웹 전용 파일이에요. react-native-maps가 웹을 지원하지 않아서, 웹에서는 진짜 지도 대신
  * 연한 격자 바탕 위에 경로만 그려요. (폰에서는 run-map.tsx의 진짜 지도가 쓰여요)
  */
 import { StyleSheet, Text, View } from 'react-native';
-import Svg, { Circle, Line, Polyline } from 'react-native-svg';
+import Svg, { Circle, Line, Polyline, Rect, Text as SvgText } from 'react-native-svg';
 
 import { Palette } from '@/constants/theme';
 import type { RunPoint } from '@/hooks/use-run-session';
+import { routeLength, splitRoute, type LatLng } from '@/utils/geo';
+import { projectRoute } from '@/utils/route-project';
 
 const W = 320; // 그림 좌표계 크기 (실제 화면 크기에 맞춰 늘어나요)
 const H = 220;
 const PAD = 28; // 경로가 카드 가장자리에 붙지 않게 두는 여백
+const COURSE_GRAY = '#A3A8B0'; // 아직 안 달린 코스
 
-/** 위도·경도 → 그림 좌표. 가장 넓게 퍼진 방향을 기준으로 한 번에 줄여서 모양이 찌그러지지 않게 해요 */
-function project(points: RunPoint[]) {
-  const lats = points.map((p) => p.lat);
-  const lngs = points.map((p) => p.lng);
-  const minLat = Math.min(...lats);
-  const maxLat = Math.max(...lats);
-  const minLng = Math.min(...lngs);
-  const maxLng = Math.max(...lngs);
-  // 경도 1도의 길이는 위도에 따라 짧아져서 cos(위도)를 곱해 가로세로 비율을 맞춰요
-  const lngScale = Math.cos((((minLat + maxLat) / 2) * Math.PI) / 180);
-  const spanX = Math.max((maxLng - minLng) * lngScale, 1e-6);
-  const spanY = Math.max(maxLat - minLat, 1e-6);
-  const scale = Math.min((W - PAD * 2) / spanX, (H - PAD * 2) / spanY);
-  const offsetX = (W - spanX * scale) / 2;
-  const offsetY = (H - spanY * scale) / 2;
-  return points.map((p) => ({
-    x: offsetX + (p.lng - minLng) * lngScale * scale,
-    y: offsetY + (maxLat - p.lat) * scale, // 북쪽이 위로 가도록 뒤집어요
-  }));
-}
+type Props = { points: RunPoint[]; live: boolean; course?: { route: LatLng[]; doneM: number } };
 
-export function RunMap({ points, live }: { points: RunPoint[]; live: boolean }) {
-  const xy = points.length > 0 ? project(points) : [];
-  const line = xy.map((p) => `${p.x},${p.y}`).join(' ');
-  const first = xy[0];
-  const last = xy[xy.length - 1];
+const toLine = (xy: { x: number; y: number }[]) => xy.map((p) => `${p.x},${p.y}`).join(' ');
+
+export function RunMap({ points, live, course }: Props) {
+  // 코스와 내 위치가 모두 그림 안에 들어오도록 함께 맞춰요
+  const all: LatLng[] = [...(course?.route ?? []), ...points];
+  const toXY = all.length > 0 ? projectRoute(all, W, H, PAD) : null;
+
+  const split = course ? splitRoute(course.route, course.doneM) : null;
+  const notStarted = course !== undefined && course.doneM <= 0;
+  const finishedCourse = course !== undefined && course.doneM >= routeLength(course.route);
+
+  // 코스 러닝이면 코스를, 아니면 지나온 길을 노란 선으로 그려요
+  const yellow = toXY ? (split ? (notStarted ? [] : split.done) : points).map(toXY) : [];
+  const gray = toXY && split ? split.rest.map(toXY) : [];
+  const start = toXY ? (course ? toXY(course.route[0]) : points[0] && toXY(points[0])) : null;
+  const me = live && toXY && points.length > 0 ? toXY(points[points.length - 1]) : null;
+  // 끝난 곳 (결과 화면): 코스를 다 못 달렸으면 멈춘 곳, 바로 러닝이면 마지막 위치
+  const end = live || !toXY ? null : split ? (notStarted || finishedCourse ? null : toXY(split.at)) : points.length > 1 ? toXY(points[points.length - 1]) : null;
 
   return (
     <View style={styles.card}>
@@ -56,26 +57,38 @@ export function RunMap({ points, live }: { points: RunPoint[]; live: boolean }) 
           <Line key={`v${i}`} x1={(W / 6) * i} y1={0} x2={(W / 6) * i} y2={H} stroke="#E4E7EC" strokeWidth={1} />
         ))}
 
-        {xy.length > 1 && (
+        {gray.length > 1 && (
+          <Polyline points={toLine(gray)} fill="none" stroke={COURSE_GRAY} strokeWidth={5} strokeLinecap="round" strokeLinejoin="round" />
+        )}
+        {yellow.length > 1 && (
           <>
-            <Polyline points={line} fill="none" stroke={Palette.ink} strokeWidth={9} strokeLinecap="round" strokeLinejoin="round" />
-            <Polyline points={line} fill="none" stroke={Palette.accent} strokeWidth={5.5} strokeLinecap="round" strokeLinejoin="round" />
+            <Polyline points={toLine(yellow)} fill="none" stroke={Palette.ink} strokeWidth={9} strokeLinecap="round" strokeLinejoin="round" />
+            <Polyline points={toLine(yellow)} fill="none" stroke={Palette.accent} strokeWidth={5.5} strokeLinecap="round" strokeLinejoin="round" />
           </>
         )}
-        {first && xy.length > 1 && (
-          <Circle cx={first.x} cy={first.y} r={4.5} fill={Palette.surface} stroke={Palette.ink} strokeWidth={2.5} />
+        {start && (course || points.length > 1) && (
+          <Circle cx={start.x} cy={start.y} r={4.5} fill={Palette.surface} stroke={Palette.ink} strokeWidth={2.5} />
         )}
-        {last && live && (
+        {start && notStarted && !live && (
+          // "출발" 글자표 (출발점 왼쪽 위)
           <>
-            <Circle cx={last.x} cy={last.y} r={22} fill="#5DD2FF" fillOpacity={0.2} />
-            <Circle cx={last.x} cy={last.y} r={10} fill={Palette.surface} />
-            <Circle cx={last.x} cy={last.y} r={7} fill="#008FFF" />
+            <Rect x={start.x - 40} y={start.y - 24} width={34} height={18} rx={9} fill={Palette.accent} />
+            <SvgText x={start.x - 23} y={start.y - 11.5} fontSize={10} fontWeight="700" fill={Palette.ink} textAnchor="middle">
+              출발
+            </SvgText>
           </>
         )}
-        {last && !live && xy.length > 1 && <Circle cx={last.x} cy={last.y} r={4.5} fill={Palette.ink} />}
+        {me && (
+          <>
+            <Circle cx={me.x} cy={me.y} r={22} fill="#5DD2FF" fillOpacity={0.2} />
+            <Circle cx={me.x} cy={me.y} r={10} fill={Palette.surface} />
+            <Circle cx={me.x} cy={me.y} r={7} fill="#008FFF" />
+          </>
+        )}
+        {end && <Circle cx={end.x} cy={end.y} r={4.5} fill={Palette.ink} />}
       </Svg>
 
-      {points.length === 0 && (
+      {!course && points.length === 0 && (
         <View style={styles.empty} pointerEvents="none">
           <Text style={styles.emptyText}>{live ? '위치를 찾는 중이에요…' : '기록된 경로가 없어요'}</Text>
         </View>

@@ -134,3 +134,30 @@ export function getGoalResult(goal: RunGoal, run: Run) {
     asideAlert: !reached,
   };
 }
+
+/**
+ * 코스 러닝 결과 (Figma: 코스 정하기 - 러닝 결과 성공 · 실패 · 중간 종료)
+ * 목표는 "코스 길이만큼 달리기"(+ 목표 시간)라서 목표 러닝 결과를 바탕으로 글자만 코스에 맞게 바꿔요.
+ * - 완주: "여의도 한바퀴 완주!" (목표 시간이 있으면 목표 달성 · 미달성 배지와 "12초 늦었어요")
+ * - 다 못 달림: "코스 미완주" 배지, "3.20km 달렸어요", 오른쪽에 "코스 4.8km · 67% 완주"
+ */
+export function getCourseResult(courseName: string, goal: RunGoal, run: Run) {
+  const base = getGoalResult(goal, run);
+  const finished = run.goalReachedSec !== null;
+  if (!finished) {
+    return {
+      ...base,
+      badge: '코스 미완주',
+      asideSmall: `코스 ${formatGoalKm(goal.distanceM ?? 0)}`,
+      asideMain: `${percent(progressRatio(goal, run), false)}% 완주`,
+    };
+  }
+  return {
+    ...base,
+    title: `${courseName} 완주!`,
+    badge: goal.timeSec ? (base.success ? '목표 달성' : '목표 미달성') : null,
+    // 목표 시간 없이 완주했으면 오른쪽 글자는 안 보여요
+    asideSmall: goal.timeSec ? base.asideSmall : null,
+    asideMain: goal.timeSec ? base.asideMain : null,
+  };
+}

@@ -14,6 +14,8 @@
  * 4. 자동 일시정지(설정에서 켰을 때만): 10초 동안 거의 안 움직이면 멈추고, 다시 움직이면 이어서 기록해요.
  * 5. 목표 러닝: 목표 정하기 화면에서 setGoal로 목표(거리 · 시간)를 넣어 둬요. 바로 러닝은 목표가 없어요(null).
  *    목표 거리를 처음 넘은 순간의 시간(goalReachedSec)을 기억해서, 결과 화면에서 "목표보다 몇 초 빨랐는지" 계산해요.
+ * 6. 코스 러닝: 코스 화면에서 setCourse로 코스를 넣고, 목표 거리 = 코스 길이로 setGoal 해요.
+ *    (목표 시간을 정했으면 목표 시간도 같이) 바로 러닝 · 목표 러닝은 코스가 없어요(null).
  *
  * TODO(API): 끝나면 POST /api/runs 로 기록(routePoints 포함)을 서버에 저장해요. (로그인 연결 후)
  * TODO: 화면 꺼짐 방지 · 음성 안내 설정은 아직 반영하지 않았어요.
@@ -21,6 +23,7 @@
 import * as Location from 'expo-location';
 import { createContext, use, useEffect, useRef, useState, type ReactNode } from 'react';
 
+import type { Course } from '@/constants/courses';
 import { useSettings } from '@/hooks/use-settings';
 
 export type RunPoint = { lat: number; lng: number; at: number };
@@ -59,6 +62,8 @@ type RunSession = {
   goal: RunGoal | null; // 바로 러닝이면 null
   goalReachedSec: number | null; // 목표 거리를 처음 넘은 순간까지 달린 시간(초). 아직 못 넘었으면 null
   setGoal: (goal: RunGoal | null) => void;
+  course: Course | null; // 코스 러닝이 아니면 null
+  setCourse: (course: Course | null) => void;
   start: () => Promise<void>;
   pause: () => void;
   resume: () => void;
@@ -89,6 +94,7 @@ export function RunSessionProvider({ children }: { children: ReactNode }) {
   const [gpsWeak, setGpsWeak] = useState(false);
   const [goal, setGoalState] = useState<RunGoal | null>(null);
   const [goalReachedSec, setGoalReachedSec] = useState<number | null>(null);
+  const [course, setCourse] = useState<Course | null>(null); // reset()으로 지우지 않아요 (목표와 같은 이유)
   const [now, setNow] = useState(() => Date.now()); // 1초마다 바뀌어서 화면의 시간을 새로 그려요
   // 화면에 시간을 그릴 때 쓰는 값 (아래 ref와 같은 값을 화면용으로 한 번 더 들고 있어요)
   const [clock, setClock] = useState<{ savedMs: number; segmentStart: number | null }>({
@@ -281,6 +287,8 @@ export function RunSessionProvider({ children }: { children: ReactNode }) {
         goal,
         goalReachedSec,
         setGoal,
+        course,
+        setCourse,
         start,
         pause,
         resume,
