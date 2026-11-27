@@ -11,7 +11,7 @@ import type { ComponentRef, ComponentType, Ref } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { CommunityIcon, CourseIcon, FriendsIcon, PlayIcon, ProfileIcon } from '@/components/common/icons';
+import { CommunityIcon, CourseIcon, FlagIcon, FriendsIcon, PlayIcon } from '@/components/common/icons';
 import { Palette } from '@/constants/theme';
 
 export default function AppTabs() {
@@ -35,8 +35,8 @@ export default function AppTabs() {
             <TabTrigger name="friends" href="/friends" asChild>
               <TabButton label="친구와 러닝" Icon={FriendsIcon} />
             </TabTrigger>
-            <TabTrigger name="profile" href="/profile" asChild>
-              <TabButton label="내 정보" Icon={ProfileIcon} />
+            <TabTrigger name="crew" href="/crew" asChild>
+              <TabButton label="크루" Icon={FlagIcon} />
             </TabTrigger>
           </TabBar>
         </TabList>

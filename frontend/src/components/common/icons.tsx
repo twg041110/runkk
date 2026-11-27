@@ -22,6 +22,16 @@ export function BellIcon(props: IconProps) {
   );
 }
 
+// 깃발 (크루 탭)
+export function FlagIcon(props: IconProps) {
+  return (
+    <LineIcon {...props}>
+      <Path d="M6 21V4" />
+      <Path d="M6 4h11l-2.5 4 2.5 4H6" />
+    </LineIcon>
+  );
+}
+
 // 해 (홈 화면 날씨)
 export function SunIcon(props: IconProps) {
   return (
