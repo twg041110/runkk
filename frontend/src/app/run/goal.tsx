@@ -19,12 +19,13 @@
  * 시작 버튼 뒤 가림막 (BottomFade)
  * - 버튼 조금 위부터 화면 아래까지: 위쪽은 흐리게(블러, expo-blur), 버튼 근처로 갈수록 배경색으로 완전히 덮어서
  *   스크롤되는 내용이 버튼 뒤로 비쳐 보이지 않게 해요.
+ * - 블러는 얇은 층 여러 장을 계단처럼 겹쳐서, 맨 위는 아주 약하고 아래로 갈수록 세져요 (경계선이 안 보이게)
  * - 안드로이드는 블러할 내용(ScrollView)을 BlurTargetView로 감싸야 진짜 블러가 돼요.
  */
 import { router } from 'expo-router';
 import { BlurTargetView, BlurView } from 'expo-blur';
 import { useEffect, useRef, useState, type ComponentRef, type ReactNode, type RefObject } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   Easing,
   FadeIn,
@@ -58,6 +59,9 @@ const MARATHON_CHIPS = [
 // 시작 버튼 높이(대략)와, 버튼 위로 서서히 가려지는 구간의 높이
 const START_BUTTON_HEIGHT = 80;
 const FADE_ABOVE_BUTTON = 56;
+// 블러 층 수와, 맨 아래(가장 흐린 곳)의 블러 세기
+const BLUR_LAYERS = 6;
+const BLUR_MAX = 18;
 
 // 카드가 늘어나고 줄어드는 속도 (0.4초)
 // 처음엔 빠르게 열리다가 끝에 다다를수록 천천히 멈추는 움직임 (ease-out cubic 곡선)
@@ -245,15 +249,22 @@ export default function RunGoalScreen() {
 function BottomFade({ height, blurTarget }: { height: number; blurTarget: RefObject<ComponentRef<typeof View> | null> }) {
   // 0(맨 위)에서 opaqueAt(버튼 윗선보다 살짝 위)까지 서서히 진해지고, 그 아래는 완전히 덮어요
   const opaqueAt = (FADE_ABOVE_BUTTON * 0.85) / height;
+  const blurZone = opaqueAt * height; // 블러가 보이는 구간 (그 아래는 배경색으로 덮여요)
   return (
     <View style={[styles.fade, { height }]} pointerEvents="none">
-      <BlurView
-        style={StyleSheet.absoluteFill}
-        intensity={18}
-        tint="light"
-        blurTarget={blurTarget}
-        blurMethod="dimezisBlurViewSdk31Plus" // 안드로이드 12 이상에서 진짜 블러 (그 아래 버전은 반투명)
-      />
+      {/* 층 i는 위에서 (i / 층 수)만큼 내려온 곳부터 시작해요. 아래로 갈수록 겹친 층이 많아서 더 흐려져요 */}
+      {Array.from({ length: BLUR_LAYERS }, (_, i) => (
+        <BlurView
+          key={i}
+          style={[StyleSheet.absoluteFill, { top: (blurZone * i) / BLUR_LAYERS }]}
+          // 아이폰 · 웹은 겹친 블러가 쌓여서 같은 세기로 충분하고,
+          // 안드로이드는 위 층이 아래 층을 덮어 버려서(쌓이지 않음) 층마다 세기를 올려요
+          intensity={Platform.OS === 'android' ? (BLUR_MAX * (i + 1)) / BLUR_LAYERS : BLUR_MAX / BLUR_LAYERS}
+          tint="light"
+          blurTarget={blurTarget}
+          blurMethod="dimezisBlurViewSdk31Plus" // 안드로이드 12 이상에서 진짜 블러 (그 아래 버전은 반투명)
+        />
+      ))}
       <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
         <Defs>
           <LinearGradient id="bottomFade" x1="0" y1="0" x2="0" y2="1">
