@@ -11,7 +11,7 @@
  * 목표 거리는 설정의 거리 단위와 상관없이 km로 정해요. (Figma 기준)
  *
  * 부드러운 움직임 (react-native-reanimated)
- * - 카드를 체크하면 카드 높이가 0.25초 동안 늘어나고, 안의 휠 · 칩은 서서히 나타나요. (LinearTransition, FadeIn)
+ * - 카드를 체크하면 카드 높이가 0.4초 동안 늘어나고(처음엔 빠르게, 끝에서 천천히 멈추게), 안의 휠 · 칩은 서서히 나타나요. (LinearTransition, FadeIn)
  * - 아래 카드 · 페이스 카드도 갑자기 튀지 않고 미끄러지듯 자리를 옮겨요.
  *
  * 시작 버튼 뒤 가림막 (BottomFade)
@@ -23,7 +23,7 @@ import { router } from 'expo-router';
 import { BlurTargetView, BlurView } from 'expo-blur';
 import { useRef, useState, type ComponentRef, type ReactNode, type RefObject } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
+import Animated, { Easing, FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
@@ -49,8 +49,12 @@ const MARATHON_CHIPS = [
 const START_BUTTON_HEIGHT = 80;
 const FADE_ABOVE_BUTTON = 56;
 
-// 카드가 늘어나고 줄어드는 속도 (0.25초)
-const LAYOUT = LinearTransition.duration(250);
+// 카드가 늘어나고 줄어드는 속도 (0.4초)
+// 처음엔 빠르게 열리다가 끝에 다다를수록 천천히 멈추는 움직임 (ease-out cubic 곡선)
+// Easing.bezier로 써야 폰과 웹(브라우저) 모두 같은 곡선으로 움직여요
+const EASE_OUT = Easing.bezier(0.33, 1, 0.68, 1);
+const LAYOUT = LinearTransition.duration(400).easing(EASE_OUT);
+const SHOW = FadeIn.duration(350).easing(EASE_OUT); // 안의 내용이 나타날 때
 
 const TIME_CHIPS = [
   { label: '20분', sec: 20 * 60 },
@@ -175,7 +179,7 @@ export default function RunGoalScreen() {
           </GoalCard>
 
           {paceSecPerKm ? (
-            <Animated.View style={styles.paceCard} layout={LAYOUT} entering={FadeIn.duration(250)} exiting={FadeOut.duration(150)}>
+            <Animated.View style={styles.paceCard} layout={LAYOUT} entering={SHOW} exiting={FadeOut.duration(150)}>
               <Text style={styles.paceLabel}>목표 페이스</Text>
               <View style={styles.paceRight}>
                 <Text style={styles.paceValue}>
@@ -186,7 +190,7 @@ export default function RunGoalScreen() {
               </View>
             </Animated.View>
           ) : (
-            <Animated.View layout={LAYOUT} entering={FadeIn.duration(250)} exiting={FadeOut.duration(150)}>
+            <Animated.View layout={LAYOUT} entering={SHOW} exiting={FadeOut.duration(150)}>
               <Text style={styles.footnote}>거리와 시간을 모두 고르면 페이스가 자동으로 계산돼요</Text>
             </Animated.View>
           )}
@@ -286,7 +290,7 @@ function GoalCard({
         </Text>
       </Pressable>
       {checked && (
-        <Animated.View style={styles.cardBody} entering={FadeIn.duration(250)} exiting={FadeOut.duration(150)}>
+        <Animated.View style={styles.cardBody} entering={SHOW} exiting={FadeOut.duration(150)}>
           {children}
         </Animated.View>
       )}
