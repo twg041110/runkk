@@ -6,6 +6,7 @@ import {
   TabTriggerSlotProps,
   Tabs,
 } from 'expo-router/ui';
+import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import type { ComponentRef, ComponentType, Ref } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -72,10 +73,21 @@ function TabButton({ label, Icon, isFocused, ...props }: TabButtonProps) {
   );
 }
 
-function RunButton({ isFocused, ...props }: TriggerProps) {
+// 가운데 버튼: 다른 탭에서 누르면 홈으로 오고, 홈에서 누르면 러닝 시작 화면을 열어요
+function RunButton({ isFocused, onPress, ...props }: TriggerProps) {
   return (
     <View style={styles.cell}>
-      <Pressable {...props} style={[styles.runButton, !isFocused && styles.runButtonIdle]}>
+      <Pressable
+        {...props}
+        onPress={
+          isFocused
+            ? (e) => {
+                e.preventDefault(); // 웹에서 버튼이 홈 링크라서, 링크로 이동하지 않게 막아요
+                router.push('/run');
+              }
+            : onPress
+        }
+        style={[styles.runButton, !isFocused && styles.runButtonIdle]}>
         <PlayIcon color={Palette.background} />
         <Text style={styles.runLabel}>러닝 시작</Text>
       </Pressable>

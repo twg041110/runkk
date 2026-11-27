@@ -1,9 +1,12 @@
+import * as Linking from 'expo-linking';
+import * as Location from 'expo-location';
 import { router } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect } from 'react';
+import { AppState, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path, Text as SvgText } from 'react-native-svg';
 
-import { BellIcon, ProfileIcon, SunIcon } from '@/components/common/icons';
+import { BellIcon, LocationOffIcon, ProfileIcon, SunIcon } from '@/components/common/icons';
 import { Palette } from '@/constants/theme';
 
 // 예시 값: 나중에 백엔드에서 받아온 기록으로 바꾸면 된다
@@ -22,6 +25,24 @@ const DARK_TEXT = '#C9CBD1'; // 작은 회색 글자
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const leftKm = Math.max(GOAL_KM - WEEKLY_KM, 0);
+
+  // 위치 권한 확인 (권한을 묻지는 않고, 지금 상태만 봐요)
+  const [permission, requestPermission, getPermission] = Location.useForegroundPermissions();
+  const locationOff = permission !== null && !permission.granted;
+
+  // 폰 설정에서 권한을 켜고 앱으로 돌아오면 다시 확인해요
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') getPermission();
+    });
+    return () => sub.remove();
+  }, [getPermission]);
+
+  // "설정에서 켜기": 아직 물어볼 수 있으면 권한 창을 띄우고, 이미 거절해서 못 물으면 폰 설정 화면을 열어요
+  const turnOnLocation = () => {
+    if (permission?.canAskAgain) requestPermission();
+    else Linking.openSettings();
+  };
 
   return (
     <View style={styles.screen}>
@@ -93,13 +114,29 @@ export default function HomeScreen() {
 
         <View style={styles.mapCard}>
           <YeouidoMap />
-          <View style={styles.locationChip}>
-            <Text style={styles.locationChipText}>내 위치</Text>
-          </View>
-          <View style={styles.placeCard}>
-            <Text style={styles.placeName}>여의도한강공원</Text>
-            <Text style={styles.placeAddress}>서울 영등포구 여의도동</Text>
-          </View>
+          {locationOff ? (
+            // 위치 권한이 없으면 지도를 흐리게 덮고 안내를 보여 줘요 (Figma: 홈 화면 - 위치 권한 꺼짐)
+            <View style={styles.permissionCover}>
+              <View style={styles.permissionIcon}>
+                <LocationOffIcon color={Palette.muted} size={26} />
+              </View>
+              <Text style={styles.permissionTitle}>위치 권한이 꺼져 있어요</Text>
+              <Text style={styles.permissionText}>{'권한을 켜면 내 위치와 주변 코스를\n지도에서 볼 수 있어요'}</Text>
+              <Pressable style={styles.permissionButton} onPress={turnOnLocation} accessibilityRole="button">
+                <Text style={styles.permissionButtonText}>설정에서 켜기</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <>
+              <View style={styles.locationChip}>
+                <Text style={styles.locationChipText}>내 위치</Text>
+              </View>
+              <View style={styles.placeCard}>
+                <Text style={styles.placeName}>여의도한강공원</Text>
+                <Text style={styles.placeAddress}>서울 영등포구 여의도동</Text>
+              </View>
+            </>
+          )}
         </View>
       </View>
     </View>
@@ -382,5 +419,44 @@ const styles = StyleSheet.create({
   placeAddress: {
     fontSize: 12,
     color: Palette.muted,
+  },
+  permissionCover: {
+    ...StyleSheet.absoluteFill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(236, 238, 241, 0.9)',
+  },
+  permissionIcon: {
+    width: 56,
+    height: 56,
+    marginBottom: 2,
+    borderRadius: 28,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  permissionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Palette.ink,
+  },
+  permissionText: {
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: 'center',
+    color: Palette.muted,
+  },
+  permissionButton: {
+    marginTop: 4,
+    paddingVertical: 11,
+    paddingHorizontal: 20,
+    borderRadius: 999,
+    backgroundColor: Palette.ink,
+  },
+  permissionButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Palette.surface,
   },
 });

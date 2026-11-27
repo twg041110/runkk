@@ -22,6 +22,17 @@ export function BellIcon(props: IconProps) {
   );
 }
 
+// 위치 꺼짐 (위치 핀 + 사선)
+export function LocationOffIcon(props: IconProps) {
+  return (
+    <LineIcon {...props}>
+      <Path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 12.2-3.1" />
+      <Path d="M18.4 11.5c-1.1 4.5-6.4 9.5-6.4 9.5" />
+      <Path d="M4 4l16 16" />
+    </LineIcon>
+  );
+}
+
 // 깃발 (크루 탭)
 export function FlagIcon(props: IconProps) {
   return (
