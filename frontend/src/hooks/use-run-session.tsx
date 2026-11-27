@@ -12,6 +12,8 @@
  * 3. 시간은 "지금까지 쌓인 시간 + 이번에 다시 달리기 시작한 뒤 흐른 시간"으로 계산해요.
  *    그래서 일시정지 동안은 시간이 늘지 않아요.
  * 4. 자동 일시정지(설정에서 켰을 때만): 10초 동안 거의 안 움직이면 멈추고, 다시 움직이면 이어서 기록해요.
+ * 5. 목표 러닝: 목표 정하기 화면에서 setGoal로 목표(거리 · 시간)를 넣어 둬요. 바로 러닝은 목표가 없어요(null).
+ *    목표 거리를 처음 넘은 순간의 시간(goalReachedSec)을 기억해서, 결과 화면에서 "목표보다 몇 초 빨랐는지" 계산해요.
  *
  * TODO(API): 끝나면 POST /api/runs 로 기록(routePoints 포함)을 서버에 저장해요. (로그인 연결 후)
  * TODO: 화면 꺼짐 방지 · 음성 안내 설정은 아직 반영하지 않았어요.
@@ -22,6 +24,9 @@ import { createContext, use, useEffect, useRef, useState, type ReactNode } from 
 import { useSettings } from '@/hooks/use-settings';
 
 export type RunPoint = { lat: number; lng: number; at: number };
+
+/** 목표: 거리(m)와 시간(초) 중 하나만 있거나 둘 다 있어요 */
+export type RunGoal = { distanceM: number | null; timeSec: number | null };
 
 /** running: 달리는 중, paused: 직접 멈춤, autoPaused: 안 움직여서 자동으로 멈춤, finished: 끝 */
 export type RunStatus = 'idle' | 'running' | 'paused' | 'autoPaused' | 'finished';
@@ -51,6 +56,9 @@ type RunSession = {
   distanceM: number;
   points: RunPoint[];
   gpsWeak: boolean;
+  goal: RunGoal | null; // 바로 러닝이면 null
+  goalReachedSec: number | null; // 목표 거리를 처음 넘은 순간까지 달린 시간(초). 아직 못 넘었으면 null
+  setGoal: (goal: RunGoal | null) => void;
   start: () => Promise<void>;
   pause: () => void;
   resume: () => void;
@@ -79,6 +87,8 @@ export function RunSessionProvider({ children }: { children: ReactNode }) {
   const [distanceM, setDistanceM] = useState(0);
   const [points, setPoints] = useState<RunPoint[]>([]);
   const [gpsWeak, setGpsWeak] = useState(false);
+  const [goal, setGoalState] = useState<RunGoal | null>(null);
+  const [goalReachedSec, setGoalReachedSec] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now()); // 1초마다 바뀌어서 화면의 시간을 새로 그려요
   // 화면에 시간을 그릴 때 쓰는 값 (아래 ref와 같은 값을 화면용으로 한 번 더 들고 있어요)
   const [clock, setClock] = useState<{ savedMs: number; segmentStart: number | null }>({
@@ -94,6 +104,9 @@ export function RunSessionProvider({ children }: { children: ReactNode }) {
   const lastPointRef = useRef<RunPoint | null>(null);
   const lastMoveAtRef = useRef(0);
   const lastFixAtRef = useRef(0);
+  const distanceRef = useRef(0); // 지금까지 거리 (GPS 콜백에서 목표 거리를 넘었는지 확인할 때 써요)
+  const goalRef = useRef<RunGoal | null>(null);
+  const goalReachedRef = useRef(false);
 
   const changeStatus = (next: RunStatus) => {
     statusRef.current = next;
@@ -147,8 +160,17 @@ export function RunSessionProvider({ children }: { children: ReactNode }) {
 
     lastPointRef.current = point;
     lastMoveAtRef.current = at;
-    setDistanceM((d) => d + step);
+    distanceRef.current += step;
+    setDistanceM(distanceRef.current);
     setPoints((list) => [...list, point]);
+
+    // 목표 거리를 처음 넘은 순간: 그때까지 달린 시간을 기억해요
+    const goalM = goalRef.current?.distanceM;
+    if (goalM && !goalReachedRef.current && distanceRef.current >= goalM) {
+      goalReachedRef.current = true;
+      const runningMs = segmentStartRef.current === null ? 0 : at - segmentStartRef.current;
+      setGoalReachedSec((savedMsRef.current + runningMs) / 1000);
+    }
 
     // 자동 일시정지 중에 다시 움직이면 이어서 기록해요
     if (current === 'autoPaused') {
@@ -188,6 +210,9 @@ export function RunSessionProvider({ children }: { children: ReactNode }) {
     lastPointRef.current = null;
     lastMoveAtRef.current = 0;
     lastFixAtRef.current = 0;
+    distanceRef.current = 0;
+    goalReachedRef.current = false;
+    setGoalReachedSec(null);
     setStartedAt(null);
     setDistanceM(0);
     setPoints([]);
@@ -212,6 +237,12 @@ export function RunSessionProvider({ children }: { children: ReactNode }) {
       // 러닝 도중 폰 위치가 꺼지는 등 GPS를 못 켜면, 앱이 멈추지 않게 "GPS 약함" 안내만 띄워요
       setGpsWeak(true);
     }
+  };
+
+  // 목표는 reset()으로 지우지 않아요 (목표를 정한 뒤 start()에서 reset()을 부르기 때문)
+  const setGoal = (next: RunGoal | null) => {
+    goalRef.current = next;
+    setGoalState(next);
   };
 
   const pause = () => {
@@ -240,7 +271,22 @@ export function RunSessionProvider({ children }: { children: ReactNode }) {
 
   return (
     <RunSessionContext
-      value={{ status, startedAt, elapsedSec, distanceM, points, gpsWeak, start, pause, resume, finish, reset }}>
+      value={{
+        status,
+        startedAt,
+        elapsedSec,
+        distanceM,
+        points,
+        gpsWeak,
+        goal,
+        goalReachedSec,
+        setGoal,
+        start,
+        pause,
+        resume,
+        finish,
+        reset,
+      }}>
       {children}
     </RunSessionContext>
   );

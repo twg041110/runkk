@@ -5,6 +5,9 @@
  * - 공유하기: 폰의 공유 창(카카오톡, 메시지 등)을 열어요.
  * - 완료: 기록을 비우고 홈으로 가요.
  * - 이번 러닝으로 이번 주 목표를 넘기면 "이번 주 목표 달성!" 팝업이 떠요.
+ * - 목표 러닝이면 (Figma: 목표 정하고 달리기 - 러닝 결과 성공/실패/중간 종료)
+ *   "목표 달성 / 목표 미달성" 배지, 결과 제목(예: "5km 30분 도전 성공!"), 큰 기록 옆에 달성률이나
+ *   "12초 빨라요 / 14초 늦었어요"를 보여 줘요. 계산은 utils/run-goal.ts에 있어요.
  *
  * TODO(API): 완료를 누를 때 POST /api/runs 로 기록을 저장해요. (지금은 저장하지 않아요)
  * TODO(API): 이번 주 기록은 FAKE_WEEK(예시 값) 대신 GET /api/runs/weekly 로 받아요.
@@ -21,7 +24,8 @@ import { RunStats } from '@/components/run/run-stats';
 import { Palette } from '@/constants/theme';
 import { FAKE_WEEK, useRunSession } from '@/hooks/use-run-session';
 import { useSettings } from '@/hooks/use-settings';
-import { formatDistance, formatDuration } from '@/utils/run-format';
+import { formatDistance, formatDuration, formatGoalLabel } from '@/utils/run-format';
+import { getGoalResult } from '@/utils/run-goal';
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 
@@ -36,7 +40,9 @@ function formatRunDate(date: Date) {
 
 export default function RunResultScreen() {
   const insets = useSafeAreaInsets();
-  const { startedAt, elapsedSec, distanceM, points, reset } = useRunSession();
+  const { startedAt, elapsedSec, distanceM, points, goal, goalReachedSec, reset } = useRunSession();
+  // 목표 러닝 결과 (바로 러닝이면 null)
+  const goalResult = goal ? getGoalResult(goal, { distanceM, elapsedSec, goalReachedSec }) : null;
   const { settings } = useSettings();
   const [notice, setNotice] = useState('');
 
@@ -74,18 +80,40 @@ export default function RunResultScreen() {
           <View style={styles.statusDot} />
           <Text style={styles.statusText}>러닝 결과</Text>
         </View>
-        <Text style={styles.mode}>바로 러닝</Text>
+        <Text style={styles.mode}>{goal ? formatGoalLabel(goal) : '바로 러닝'}</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
         <RunMap points={points} live={false} />
 
         <View style={styles.titleBox}>
-          <Text style={styles.title}>오늘의 러닝 완료!</Text>
+          {goalResult && (
+            <View style={[styles.badge, goalResult.success ? styles.badgeOk : styles.badgeFail]}>
+              {goalResult.success && <CheckIcon color={Palette.ink} size={13} />}
+              <Text style={styles.badgeText}>{goalResult.success ? '목표 달성' : '목표 미달성'}</Text>
+            </View>
+          )}
+          <Text style={styles.title}>{goalResult ? goalResult.title : '오늘의 러닝 완료!'}</Text>
           {startedAt && <Text style={styles.date}>{formatRunDate(startedAt)}</Text>}
         </View>
 
-        <RunStats distanceM={distanceM} elapsedSec={elapsedSec} label="달린 거리" />
+        {goalResult ? (
+          <RunStats
+            distanceM={distanceM}
+            elapsedSec={elapsedSec}
+            label={goalResult.label}
+            primary={goalResult.primary}
+            bigTimeSec={goalResult.bigTimeSec}
+            aside={
+              <View style={styles.aside}>
+                {goalResult.asideSmall && <Text style={styles.asideSmall}>{goalResult.asideSmall}</Text>}
+                <Text style={[styles.asideMain, goalResult.asideAlert && styles.asideAlert]}>{goalResult.asideMain}</Text>
+              </View>
+            }
+          />
+        ) : (
+          <RunStats distanceM={distanceM} elapsedSec={elapsedSec} label="달린 거리" />
+        )}
       </ScrollView>
 
       <View style={[styles.buttons, { paddingBottom: insets.bottom + 20 }]}>
@@ -191,6 +219,46 @@ const styles = StyleSheet.create({
   },
   titleBox: {
     gap: 4,
+  },
+  badge: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 6,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+  },
+  badgeOk: {
+    backgroundColor: Palette.accent,
+  },
+  badgeFail: {
+    borderWidth: 1,
+    borderColor: Palette.border,
+    backgroundColor: Palette.surface,
+  },
+  badgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Palette.ink,
+  },
+  aside: {
+    alignItems: 'flex-end',
+    gap: 2,
+    marginBottom: 12,
+  },
+  asideSmall: {
+    fontSize: 12,
+    color: Palette.hint,
+  },
+  asideMain: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: Palette.ink,
+  },
+  asideAlert: {
+    color: Palette.alert,
   },
   title: {
     fontSize: 24,

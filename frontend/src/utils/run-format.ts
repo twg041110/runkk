@@ -46,3 +46,37 @@ export function formatPace(meters: number, totalSec: number, unit: DistanceUnit)
 export function estimateCalories(meters: number, weightKg = 65) {
   return Math.round((meters / 1000) * weightKg * 1.036);
 }
+
+// ───────── 목표 러닝에서 쓰는 글자 ─────────
+
+/** 초 → "30분", "1시간 5분", "21분 45초", "12초" (한글로 읽기 쉬운 시간) */
+export function formatKoreanDuration(totalSec: number) {
+  const sec = Math.round(totalSec);
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  const parts = [h > 0 && `${h}시간`, m > 0 && `${m}분`, s > 0 && `${s}초`].filter(Boolean);
+  return parts.length > 0 ? parts.join(' ') : '0초';
+}
+
+/** 목표 거리 → "5.0km" (하프 21097.5m → "21.1km") */
+export function formatGoalKm(meters: number) {
+  return `${(meters / 1000).toFixed(1)}km`;
+}
+
+/** 목표 거리를 짧게 → "5km" (딱 떨어지지 않으면 "21.1km") */
+export function formatGoalKmShort(meters: number) {
+  return meters % 1000 === 0 ? `${meters / 1000}km` : formatGoalKm(meters);
+}
+
+/** 목표 페이스(1km당 초) → 6'00" */
+export function formatPaceSec(secPerKm: number) {
+  const sec = Math.round(secPerKm);
+  return `${Math.floor(sec / 60)}'${String(sec % 60).padStart(2, '0')}"`;
+}
+
+/** 목표 → "목표 5.0km", "목표 30분", "목표 5.0km · 30분" (러닝 중 · 결과 화면 오른쪽 위) */
+export function formatGoalLabel(goal: { distanceM: number | null; timeSec: number | null }) {
+  const parts = [goal.distanceM && formatGoalKm(goal.distanceM), goal.timeSec && formatKoreanDuration(goal.timeSec)];
+  return `목표 ${parts.filter(Boolean).join(' · ')}`;
+}
