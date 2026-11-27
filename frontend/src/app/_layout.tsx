@@ -41,8 +41,12 @@ export default function RootLayout() {
               <Stack.Screen name="profile" />
               {/* 설정은 탭 바 없이 전체 화면으로 열린다 */}
               <Stack.Screen name="settings" />
-              {/* 러닝(시작 → 카운트다운 → 러닝 중 → 결과)도 탭 바 없이 전체 화면으로 열린다 */}
-              <Stack.Screen name="run" />
+              {/* 러닝(시작 → 카운트다운 → 러닝 중 → 결과)도 탭 바 없이 전체 화면으로 열린다.
+                  홈 버튼에서 원이 커지며 나타나도록, 밀려 들어오는 효과 없이 투명하게 홈 위에 겹쳐 연다 */}
+              <Stack.Screen
+                name="run"
+                options={{ presentation: 'transparentModal', animation: 'none', contentStyle: { backgroundColor: 'transparent' } }}
+              />
             </Stack.Protected>
             <Stack.Protected guard={!signedIn}>
               <Stack.Screen name="(auth)/login" />

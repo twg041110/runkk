@@ -5,12 +5,14 @@
  * - 바로 러닝: 위치 권한 + 폰 위치(GPS) 켜짐을 확인하고(use-location-check) → 카운트다운으로 가요.
  * - 목표 정하고 달리기: 목표 정하기 화면(/run/goal)으로 가요.
  * - 코스 정하기: 코스 목록 화면(/run/course)으로 가요.
+ * - 홈 가운데 버튼으로 열면 버튼의 검은 원 자리(rx, ry)에서부터 원이 커지면서 나타나요 (CircleReveal).
  */
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ChevronLeftIcon, ChevronRightIcon, PlayIcon } from '@/components/common/icons';
+import { CircleReveal } from '@/components/run/circle-reveal';
 import { Palette } from '@/constants/theme';
 import { useLocationCheck } from '@/hooks/use-location-check';
 import { FAKE_WEEK, useRunSession } from '@/hooks/use-run-session';
@@ -20,6 +22,9 @@ const DAYS = ['월', '화', '수', '목', '금', '토', '일'];
 export default function RunStartScreen() {
   const insets = useSafeAreaInsets();
   const { setGoal, setCourse } = useRunSession();
+  // 홈 버튼의 검은 원 가운데 위치 (홈 버튼으로 열었을 때만 있어요)
+  const { rx, ry } = useLocalSearchParams<{ rx?: string; ry?: string }>();
+  const origin = rx && ry ? { x: Number(rx), y: Number(ry) } : null;
   // 바로 러닝: 목표 없이(null) 시작해요
   const { check: startQuickRun, dialogs } = useLocationCheck(() => {
     setGoal(null);
@@ -28,36 +33,38 @@ export default function RunStartScreen() {
   });
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
-        <Pressable style={styles.back} onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="뒤로 가기">
-          <ChevronLeftIcon color={Palette.ink} size={24} />
-        </Pressable>
+    <CircleReveal origin={origin}>
+      <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
+        <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
+          <Pressable style={styles.back} onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="뒤로 가기">
+            <ChevronLeftIcon color={Palette.ink} size={24} />
+          </Pressable>
 
-        <View style={styles.titleBox}>
-          <Text style={styles.title}>어떻게 달릴까요?</Text>
-          <Text style={styles.subtitle}>오늘의 러닝 방식을 골라주세요</Text>
-        </View>
+          <View style={styles.titleBox}>
+            <Text style={styles.title}>어떻게 달릴까요?</Text>
+            <Text style={styles.subtitle}>오늘의 러닝 방식을 골라주세요</Text>
+          </View>
 
-        <WeekCard />
+          <WeekCard />
 
-        <View style={styles.options}>
-          <OptionCard title="바로 러닝" description="코스 없이 원하는 만큼 달려요" play onPress={startQuickRun} />
-          <OptionCard
-            title="목표 정하고 달리기"
-            description="거리나 시간 목표를 정해서 달려요"
-            onPress={() => router.push('/run/goal')}
-          />
-          <OptionCard
-            title="코스 정하기"
-            description="추천 코스를 따라 달려요"
-            onPress={() => router.push('/run/course')}
-          />
-        </View>
-      </ScrollView>
+          <View style={styles.options}>
+            <OptionCard title="바로 러닝" description="코스 없이 원하는 만큼 달려요" play onPress={startQuickRun} />
+            <OptionCard
+              title="목표 정하고 달리기"
+              description="거리나 시간 목표를 정해서 달려요"
+              onPress={() => router.push('/run/goal')}
+            />
+            <OptionCard
+              title="코스 정하기"
+              description="추천 코스를 따라 달려요"
+              onPress={() => router.push('/run/course')}
+            />
+          </View>
+        </ScrollView>
 
-      {dialogs}
-    </View>
+        {dialogs}
+      </View>
+    </CircleReveal>
   );
 }
 

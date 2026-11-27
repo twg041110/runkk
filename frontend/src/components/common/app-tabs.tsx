@@ -8,7 +8,7 @@ import {
 } from 'expo-router/ui';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import type { ComponentRef, ComponentType, Ref } from 'react';
+import { useRef, type ComponentRef, type ComponentType, type Ref } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -74,16 +74,26 @@ function TabButton({ label, Icon, isFocused, ...props }: TabButtonProps) {
 }
 
 // 가운데 버튼: 다른 탭에서 누르면 홈으로 오고, 홈에서 누르면 러닝 시작 화면을 열어요
+// 러닝 시작 화면은 이 버튼의 검은 원 자리에서부터 원이 커지면서 나타나요 (components/run/circle-reveal.tsx)
 function RunButton({ isFocused, onPress, ...props }: TriggerProps) {
+  const cellRef = useRef<ComponentRef<typeof View>>(null);
+
+  const openRun = () => {
+    // 버튼 칸의 화면 위치를 재서 검은 원의 가운데를 구해요 (원은 칸 위쪽으로 25 튀어나와 있고 지름 80)
+    cellRef.current?.measureInWindow((x, y, width) => {
+      router.push({ pathname: '/run', params: { rx: String(x + width / 2), ry: String(y - 25 + 40) } });
+    });
+  };
+
   return (
-    <View style={styles.cell}>
+    <View ref={cellRef} style={styles.cell}>
       <Pressable
         {...props}
         onPress={
           isFocused
             ? (e) => {
                 e.preventDefault(); // 웹에서 버튼이 홈 링크라서, 링크로 이동하지 않게 막아요
-                router.push('/run');
+                openRun();
               }
             : onPress
         }
