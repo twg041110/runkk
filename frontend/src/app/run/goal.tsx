@@ -13,6 +13,8 @@
  * 부드러운 움직임 (react-native-reanimated)
  * - 카드를 체크하면 카드 높이가 0.4초 동안 늘어나고(처음엔 빠르게, 끝에서 천천히 멈추게), 안의 휠 · 칩은 서서히 나타나요. (LinearTransition, FadeIn)
  * - 아래 카드 · 페이스 카드도 갑자기 튀지 않고 미끄러지듯 자리를 옮겨요.
+ * - 목표 페이스 카드와 안내 문구는 갑자기 사라지지 않고 높이 · 진하기가 함께 줄어들며 접혀요. (Collapse)
+ *   (체크 해제, 시간 0분, 거리 0km 모두 같은 방식)
  *
  * 시작 버튼 뒤 가림막 (BottomFade)
  * - 버튼 조금 위부터 화면 아래까지: 위쪽은 흐리게(블러, expo-blur), 버튼 근처로 갈수록 배경색으로 완전히 덮어서
@@ -21,9 +23,17 @@
  */
 import { router } from 'expo-router';
 import { BlurTargetView, BlurView } from 'expo-blur';
-import { useRef, useState, type ComponentRef, type ReactNode, type RefObject } from 'react';
+import { useEffect, useRef, useState, type ComponentRef, type ReactNode, type RefObject } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import Animated, { Easing, FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
+import Animated, {
+  Easing,
+  FadeIn,
+  FadeOut,
+  LinearTransition,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
@@ -83,6 +93,9 @@ export default function RunGoalScreen() {
 
   // 둘 다 골랐을 때만 페이스를 계산해요 (1km를 몇 초에 달려야 하는지)
   const paceSecPerKm = distanceOn && timeOn && distanceM > 0 ? timeSec / (distanceM / 1000) : null;
+  // 페이스 카드가 접히며 사라지는 동안에도 숫자가 비지 않게, 마지막으로 보인 페이스를 기억해요
+  const [shownPace, setShownPace] = useState(paceSecPerKm);
+  if (paceSecPerKm && paceSecPerKm !== shownPace) setShownPace(paceSecPerKm);
 
   // 0km나 0분을 고르면 목표로 쓸 수 없어요
   const distanceOk = distanceOn && distanceM > 0;
@@ -178,22 +191,24 @@ export default function RunGoalScreen() {
             </View>
           </GoalCard>
 
-          {paceSecPerKm ? (
-            <Animated.View style={styles.paceCard} layout={LAYOUT} entering={SHOW} exiting={FadeOut.duration(150)}>
-              <Text style={styles.paceLabel}>목표 페이스</Text>
-              <View style={styles.paceRight}>
-                <Text style={styles.paceValue}>
-                  {formatPaceSec(paceSecPerKm)}
-                  <Text style={styles.paceUnit}> /km</Text>
-                </Text>
-                <Text style={styles.paceAuto}>자동 계산</Text>
+          {/* 페이스 카드 ↔ 안내 문구: 하나가 접히는 동안 다른 하나가 펼쳐져요 */}
+          <Animated.View layout={LAYOUT}>
+            <Collapse open={!!paceSecPerKm}>
+              <View style={styles.paceCard}>
+                <Text style={styles.paceLabel}>목표 페이스</Text>
+                <View style={styles.paceRight}>
+                  <Text style={styles.paceValue}>
+                    {shownPace ? formatPaceSec(shownPace) : ''}
+                    <Text style={styles.paceUnit}> /km</Text>
+                  </Text>
+                  <Text style={styles.paceAuto}>자동 계산</Text>
+                </View>
               </View>
-            </Animated.View>
-          ) : (
-            <Animated.View layout={LAYOUT} entering={SHOW} exiting={FadeOut.duration(150)}>
+            </Collapse>
+            <Collapse open={!paceSecPerKm}>
               <Text style={styles.footnote}>거리와 시간을 모두 고르면 페이스가 자동으로 계산돼요</Text>
-            </Animated.View>
-          )}
+            </Collapse>
+          </Animated.View>
         </ScrollView>
       </BlurTargetView>
 
@@ -250,6 +265,34 @@ function BottomFade({ height, blurTarget }: { height: number; blurTarget: RefObj
         <Rect x="0" y="0" width="100%" height="100%" fill="url(#bottomFade)" />
       </Svg>
     </View>
+  );
+}
+
+/**
+ * 열고 닫을 때 높이 · 진하기가 함께 부드럽게 바뀌는 상자 (카드 열림과 같은 0.4초 ease-out)
+ * 안의 내용 높이를 재 두고(onLayout), 바깥 상자 높이를 0 ↔ 그 높이로 움직여요. 닫힌 동안에도 내용은 남아 있어서
+ * 사라지는 도중에 글자가 먼저 없어지지 않아요.
+ */
+function Collapse({ open, children }: { open: boolean; children: ReactNode }) {
+  const contentHeight = useSharedValue(0); // 안의 내용 높이
+  const progress = useSharedValue(open ? 1 : 0); // 0: 닫힘, 1: 열림
+
+  useEffect(() => {
+    progress.set(withTiming(open ? 1 : 0, { duration: 400, easing: EASE_OUT }));
+  }, [open, progress]);
+
+  const style = useAnimatedStyle(() => ({
+    height: contentHeight.get() * progress.get(),
+    opacity: progress.get(),
+  }));
+
+  return (
+    <Animated.View style={[styles.collapse, style]} pointerEvents={open ? 'auto' : 'none'}>
+      {/* 바깥 높이와 상관없이 원래 높이를 재려고, 안쪽은 위에 붙여 놓아요 */}
+      <View style={styles.collapseInner} onLayout={(e) => contentHeight.set(e.nativeEvent.layout.height)}>
+        {children}
+      </View>
+    </Animated.View>
   );
 }
 
@@ -469,6 +512,15 @@ const styles = StyleSheet.create({
   paceAuto: {
     fontSize: 11,
     color: '#9AA0AA',
+  },
+  collapse: {
+    overflow: 'hidden',
+  },
+  collapseInner: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
   },
   footnote: {
     marginTop: 4,
