@@ -9,6 +9,9 @@
  *   "목표 달성 / 목표 미달성" 배지, 결과 제목(예: "5km 30분 도전 성공!"), 큰 기록 옆에 달성률이나
  *   "12초 빨라요 / 14초 늦었어요"를 보여 줘요. 계산은 utils/run-goal.ts에 있어요.
  *
+ * - 코스 러닝이면 (Figma: 코스 정하기 - 러닝 결과 성공/실패/중간 종료) 지도에 코스를 그리고,
+ *   "여의도 한바퀴 완주!" 또는 "코스 미완주"와 몇 % 완주했는지 보여 줘요. (utils/run-goal.ts의 getCourseResult)
+ *
  * TODO(API): 완료를 누를 때 POST /api/runs 로 기록을 저장해요. (지금은 저장하지 않아요)
  * TODO(API): 이번 주 기록은 FAKE_WEEK(예시 값) 대신 GET /api/runs/weekly 로 받아요.
  */
@@ -25,7 +28,7 @@ import { Palette } from '@/constants/theme';
 import { FAKE_WEEK, useRunSession } from '@/hooks/use-run-session';
 import { useSettings } from '@/hooks/use-settings';
 import { formatDistance, formatDuration, formatGoalLabel } from '@/utils/run-format';
-import { getGoalResult } from '@/utils/run-goal';
+import { getCourseResult, getGoalResult } from '@/utils/run-goal';
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 
@@ -40,9 +43,15 @@ function formatRunDate(date: Date) {
 
 export default function RunResultScreen() {
   const insets = useSafeAreaInsets();
-  const { startedAt, elapsedSec, distanceM, points, goal, goalReachedSec, reset } = useRunSession();
-  // 목표 러닝 결과 (바로 러닝이면 null)
-  const goalResult = goal ? getGoalResult(goal, { distanceM, elapsedSec, goalReachedSec }) : null;
+  const { startedAt, elapsedSec, distanceM, points, goal, goalReachedSec, course, reset } = useRunSession();
+  // 목표 · 코스 러닝 결과 (바로 러닝이면 null). badge: 제목 위 작은 배지 글자 (없으면 안 보여요)
+  const run = { distanceM, elapsedSec, goalReachedSec };
+  const goalResult = !goal
+    ? null
+    : course
+      ? getCourseResult(course.name, goal, run)
+      : { ...getGoalResult(goal, run), badge: null as string | null };
+  const badge = goalResult && (course ? goalResult.badge : goalResult.success ? '목표 달성' : '목표 미달성');
   const { settings } = useSettings();
   const [notice, setNotice] = useState('');
 
@@ -80,17 +89,23 @@ export default function RunResultScreen() {
           <View style={styles.statusDot} />
           <Text style={styles.statusText}>러닝 결과</Text>
         </View>
-        <Text style={styles.mode}>{goal ? formatGoalLabel(goal) : '바로 러닝'}</Text>
+        <Text style={styles.mode}>
+          {course
+            ? `${course.name}${goal?.timeSec ? ` · 목표 ${formatDuration(goal.timeSec)}` : ''}`
+            : goal
+              ? formatGoalLabel(goal)
+              : '바로 러닝'}
+        </Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        <RunMap points={points} live={false} />
+        <RunMap points={points} live={false} course={course ? { route: course.route, doneM: distanceM } : undefined} />
 
         <View style={styles.titleBox}>
-          {goalResult && (
+          {goalResult && badge && (
             <View style={[styles.badge, goalResult.success ? styles.badgeOk : styles.badgeFail]}>
               {goalResult.success && <CheckIcon color={Palette.ink} size={13} />}
-              <Text style={styles.badgeText}>{goalResult.success ? '목표 달성' : '목표 미달성'}</Text>
+              <Text style={styles.badgeText}>{badge}</Text>
             </View>
           )}
           <Text style={styles.title}>{goalResult ? goalResult.title : '오늘의 러닝 완료!'}</Text>
@@ -107,7 +122,9 @@ export default function RunResultScreen() {
             aside={
               <View style={styles.aside}>
                 {goalResult.asideSmall && <Text style={styles.asideSmall}>{goalResult.asideSmall}</Text>}
-                <Text style={[styles.asideMain, goalResult.asideAlert && styles.asideAlert]}>{goalResult.asideMain}</Text>
+                {goalResult.asideMain && (
+                  <Text style={[styles.asideMain, goalResult.asideAlert && styles.asideAlert]}>{goalResult.asideMain}</Text>
+                )}
               </View>
             }
           />

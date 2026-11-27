@@ -140,7 +140,7 @@ free -h                                    # 메모리·스왑 사용량
   - 서버(Docker)에서는 이 파일 대신 `docker-compose.yml`의 환경 변수(`SPRING_DATASOURCE_*`, `JWT_SECRET`)로 DB와 JWT 값을 넣습니다.
 - `application-local.yaml`(`local` 프로필): **DB 설치 없이 내 PC에서 켜는 설정**입니다.
   - H2 파일 DB(`backend/data/`, MySQL 모드)를 씁니다. 폴더를 지우면 처음 상태로 돌아갑니다.
-  - `runkk.seed: true`라서 처음 켤 때 예시 데이터(코스, 크루, 게시글, 예시 계정)가 들어갑니다(`common/LocalSeedData.java`). 예시 계정은 `backend/API.md`에 있습니다.
+  - `runkk.seed: true`라서 처음 켤 때 예시 데이터(크루, 게시글, 예시 계정)가 들어갑니다(`common/LocalSeedData.java`). 코스는 서버와 똑같이 `courses.json`으로 들어갑니다. 예시 계정은 `backend/API.md`에 있습니다.
 - JWT: `runkk.jwt.secret`(서버에서는 `.env`의 `JWT_SECRET`), 만료 14일. 값이 비어 있으면 임시 키를 써서, 서버를 다시 켤 때마다 모두 로그아웃됩니다.
 
 ### 5-2. 내 PC에서 백엔드 켜기
@@ -205,7 +205,8 @@ JDK 25가 필요합니다. 테스트는 `./gradlew test`(H2 메모리 DB)로 돌
   - `settings/*`: 설정 화면들 (main에 합쳐짐)
   - `run/*`: 바로 러닝 흐름 (시작 → 위치 권한 → 카운트다운 → 러닝 중 → 결과, main에 합쳐짐). 러닝 상태는 `hooks/use-run-session.tsx`, 지도는 `components/run/run-map.tsx`(폰) · `run-map.web.tsx`(웹은 격자 그림)
     - 목표 정하고 달리기: `run/goal.tsx`(거리 · 시간 휠), 진행 막대 `components/run/goal-progress.tsx`, 달성 계산 `utils/run-goal.ts`
-    - 아직 안 된 것: 기록 서버 저장(`TODO(API)` POST /api/runs), 이번 주 기록은 예시 값(`FAKE_WEEK`), 코스 정하기, 화면 켜짐 유지 · 음성 안내
+    - 코스 정하고 달리기: `run/course.tsx`(목록) → `run/course-detail.tsx` → `run/course-time.tsx`(목표 시간). 코스는 아직 앱 안의 예시 3개(`constants/courses.ts`, `TODO(API)` GET /api/courses), 코스 이탈 안내는 `utils/geo.ts`
+    - 아직 안 된 것: 기록 서버 저장(`TODO(API)` POST /api/runs), 이번 주 기록은 예시 값(`FAKE_WEEK`), 코스를 서버에서 받기, 코스 평가 · 후기, 화면 켜짐 유지 · 음성 안내
 - 러닝 입구: 홈에서 가운데 "러닝 시작" 버튼을 누르면 러닝 시작 화면이 열립니다(다른 탭에서 누르면 홈으로 감).
 - 임시 입구: 내 정보 화면의 "설정 열기 (임시)" 버튼. 정식 내 정보 화면이 생기면 지울 예정입니다.
 

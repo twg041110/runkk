@@ -9,6 +9,7 @@
  * primary: 큰 숫자를 무엇으로 할지
  * - 'distance'(기본): 큰 숫자 = 거리, 카드 = 시간 · 평균 페이스 · 칼로리
  * - 'time': 큰 숫자 = 시간, 카드 = 거리 · 평균 페이스 · 칼로리 (시간 목표 러닝, 목표 결과 "기록")
+ * remainingM: 있으면 칼로리 카드 대신 "남은 거리" 카드를 보여 줘요 (코스 러닝 중)
  */
 import type { ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -25,9 +26,10 @@ type Props = {
   bigTimeSec?: number; // primary가 'time'일 때 큰 숫자로 보여 줄 시간 (기본은 elapsedSec)
   aside?: ReactNode;
   children?: ReactNode;
+  remainingM?: number;
 };
 
-export function RunStats({ distanceM, elapsedSec, label, primary = 'distance', bigTimeSec, aside, children }: Props) {
+export function RunStats({ distanceM, elapsedSec, label, primary = 'distance', bigTimeSec, aside, children, remainingM }: Props) {
   const { settings } = useSettings();
   const unit = settings.distanceUnit; // 설정 → 거리 단위 (km / mi)
   const isTime = primary === 'time';
@@ -55,7 +57,11 @@ export function RunStats({ distanceM, elapsedSec, label, primary = 'distance', b
           <StatCard title="시간" value={formatDuration(elapsedSec)} />
         )}
         <StatCard title="평균 페이스" value={formatPace(distanceM, elapsedSec, unit)} />
-        <StatCard title="칼로리" value={String(estimateCalories(distanceM))} unit="kcal" />
+        {remainingM === undefined ? (
+          <StatCard title="칼로리" value={String(estimateCalories(distanceM))} unit="kcal" />
+        ) : (
+          <StatCard title="남은 거리" value={formatDistance(remainingM, unit)} unit={unit} />
+        )}
       </View>
     </View>
   );

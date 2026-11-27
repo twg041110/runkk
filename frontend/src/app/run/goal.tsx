@@ -79,7 +79,7 @@ const TIME_CHIPS = [
 
 export default function RunGoalScreen() {
   const insets = useSafeAreaInsets();
-  const { setGoal } = useRunSession();
+  const { setGoal, setCourse } = useRunSession();
   const blurTarget = useRef<ComponentRef<typeof View>>(null); // 안드로이드 블러가 흐리게 할 대상(스크롤 내용)
   // 가림막 높이 = 버튼 아래 여백 + 버튼 + 버튼 위 서서히 가려지는 구간
   const fadeHeight = insets.bottom + 16 + START_BUTTON_HEIGHT + FADE_ABOVE_BUTTON;
@@ -116,6 +116,7 @@ export default function RunGoalScreen() {
 
   const { check, dialogs } = useLocationCheck(() => {
     setGoal({ distanceM: distanceOn ? distanceM : null, timeSec: timeOn ? timeSec : null });
+    setCourse(null);
     router.push('/run/countdown');
   });
 

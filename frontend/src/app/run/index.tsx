@@ -4,15 +4,13 @@
  * - 위쪽 카드: 이번 주 러닝 (지금은 예시 값, TODO(API): GET /api/runs/weekly)
  * - 바로 러닝: 위치 권한 + 폰 위치(GPS) 켜짐을 확인하고(use-location-check) → 카운트다운으로 가요.
  * - 목표 정하고 달리기: 목표 정하기 화면(/run/goal)으로 가요.
- * - 코스 정하기: 아직 안 만들어서 안내만 띄워요.
+ * - 코스 정하기: 코스 목록 화면(/run/course)으로 가요.
  */
 import { router } from 'expo-router';
-import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ChevronLeftIcon, ChevronRightIcon, PlayIcon } from '@/components/common/icons';
-import { Toast } from '@/components/common/toast';
 import { Palette } from '@/constants/theme';
 import { useLocationCheck } from '@/hooks/use-location-check';
 import { FAKE_WEEK, useRunSession } from '@/hooks/use-run-session';
@@ -21,11 +19,11 @@ const DAYS = ['월', '화', '수', '목', '금', '토', '일'];
 
 export default function RunStartScreen() {
   const insets = useSafeAreaInsets();
-  const [notice, setNotice] = useState('');
-  const { setGoal } = useRunSession();
+  const { setGoal, setCourse } = useRunSession();
   // 바로 러닝: 목표 없이(null) 시작해요
   const { check: startQuickRun, dialogs } = useLocationCheck(() => {
     setGoal(null);
+    setCourse(null);
     router.push('/run/countdown');
   });
 
@@ -53,13 +51,12 @@ export default function RunStartScreen() {
           <OptionCard
             title="코스 정하기"
             description="추천 코스를 따라 달려요"
-            onPress={() => setNotice('코스 러닝은 곧 만들 예정이에요')}
+            onPress={() => router.push('/run/course')}
           />
         </View>
       </ScrollView>
 
       {dialogs}
-      <Toast message={notice} onHide={() => setNotice('')} />
     </View>
   );
 }
