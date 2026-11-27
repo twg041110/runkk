@@ -37,6 +37,8 @@ export default function RootLayout() {
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Protected guard={signedIn}>
               <Stack.Screen name="(tabs)" />
+              {/* 내 정보는 홈 오른쪽 위 버튼으로 열리고, 탭 바 없이 전체 화면으로 열린다 */}
+              <Stack.Screen name="profile" />
               {/* 설정은 탭 바 없이 전체 화면으로 열린다 */}
               <Stack.Screen name="settings" />
               {/* 러닝(시작 → 카운트다운 → 러닝 중 → 결과)도 탭 바 없이 전체 화면으로 열린다 */}
